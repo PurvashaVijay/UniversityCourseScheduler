@@ -1,0 +1,174 @@
+erDiagram
+    Department {
+        int department_id PK
+        string name
+        string description
+        date created_at
+        date updated_at
+    }
+    
+    Program {
+        int program_id PK
+        int department_id FK
+        string name
+        string description
+        date created_at
+        date updated_at
+    }
+    
+    Course {
+        int course_id PK
+        int department_id FK
+        string course_code
+        string title
+        text description
+        int duration_minutes
+        boolean is_core
+        date created_at
+        date updated_at
+    }
+    
+    Section {
+        int section_id PK
+        int course_id FK
+        string section_name
+        int max_capacity
+        date created_at
+        date updated_at
+    }
+    
+    CourseProgram {
+        int course_program_id PK
+        int course_id FK
+        int program_id FK
+        boolean is_required
+        date created_at
+    }
+    
+    Professor {
+        int professor_id PK
+        int department_id FK
+        string first_name
+        string last_name
+        string email
+        string password_hash
+        date created_at
+        date updated_at
+    }
+    
+    CoursePrerequisite {
+        int prerequisite_id PK
+        int course_id FK
+        int prerequisite_course_id FK
+        date created_at
+    }
+    
+    TimeSlot {
+        int timeslot_id PK
+        string name
+        time start_time
+        time end_time
+        int duration_minutes
+        date created_at
+        date updated_at
+    }
+    
+    ProfessorAvailability {
+        int availability_id PK
+        int professor_id FK
+        int timeslot_id FK
+        int day_of_week
+        boolean is_available
+        date created_at
+        date updated_at
+    }
+    
+    Schedule {
+        int schedule_id PK
+        int semester_id FK
+        string name
+        date created_at
+        date updated_at
+        boolean is_final
+    }
+    
+    Semester {
+        int semester_id PK
+        string name
+        date start_date
+        date end_date
+        date created_at
+        date updated_at
+    }
+    
+    ScheduledCourse {
+        int scheduled_course_id PK
+        int schedule_id FK
+        int section_id FK
+        int professor_id FK
+        int timeslot_id FK
+        int day_of_week
+        boolean is_override
+        text override_reason
+        date created_at
+        date updated_at
+    }
+    
+    Conflict {
+        int conflict_id PK
+        int schedule_id FK
+        int timeslot_id FK
+        int day_of_week
+        string conflict_type
+        text description
+        boolean is_resolved
+        text resolution_notes
+        date created_at
+        date updated_at
+    }
+    
+    ConflictCourse {
+        int conflict_course_id PK
+        int conflict_id FK
+        int scheduled_course_id FK
+    }
+    
+    Admin {
+        int admin_id PK
+        int department_id FK
+        string first_name
+        string last_name
+        string email
+        string password_hash
+        date created_at
+        date updated_at
+    }
+    
+    Department ||--o{ Program : "has"
+    Department ||--o{ Course : "offers"
+    Department ||--o{ Professor : "employs"
+    Department ||--o{ Admin : "has_admin"
+    
+    Program ||--o{ CourseProgram : "includes"
+    
+    Course ||--o{ Section : "has_sections"
+    Course ||--o{ CourseProgram : "belongs_to"
+    Course ||--o{ CoursePrerequisite : "has_prerequisites"
+    Course }o--o{ Course : "is_prerequisite_for"
+    
+    Section ||--o{ ScheduledCourse : "is_scheduled_as"
+    
+    Professor ||--o{ ProfessorAvailability : "provides"
+    Professor ||--o{ ScheduledCourse : "teaches"
+    
+    TimeSlot ||--o{ ProfessorAvailability : "available_during"
+    TimeSlot ||--o{ ScheduledCourse : "used_for"
+    TimeSlot ||--o{ Conflict : "has_conflict"
+    
+    Semester ||--o{ Schedule : "has_schedule"
+    
+    Schedule ||--o{ ScheduledCourse : "contains"
+    Schedule ||--o{ Conflict : "has_conflicts"
+    
+    ScheduledCourse }o--o{ Conflict : "involved_in"
+    Conflict ||--o{ ConflictCourse : "involves"
