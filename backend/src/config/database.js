@@ -10,12 +10,21 @@ const sequelize = new Sequelize(
     port: process.env.DB_PORT,
     dialect: 'postgres',
     logging: process.env.NODE_ENV === 'development' ? console.log : false,
+    define: {
+      timestamps: false, // We'll handle timestamps manually as per schema
+      underscored: true  // Use snake_case for column names
+    },
     pool: {
       max: 5,
       min: 0,
       acquire: 30000,
       idle: 10000
-    }
+    },
+    dialectOptions: {
+      dateStrings: true,
+      typeCast: true
+    },
+    timezone: '+00:00'
   }
 );
 
