@@ -1,0 +1,191 @@
+{
+  "scheduled_courses": [
+    {
+      "scheduled_course_id": "SC-b40df15a",
+      "schedule_id": "SCH-12345678",
+      "course_id": "COURSE-001",
+      "professor_id": "PROF-002",
+      "timeslot_id": "TS-005",
+      "day_of_week": "Tuesday",
+      "is_override": false,
+      "course_data": {
+        "course_id": "COURSE-001",
+        "course_name": "Introduction to Computer Science",
+        "department_id": "DEPT-CS",
+        "duration_minutes": 55,
+        "is_core": true,
+        "department_name": "Computer Science",
+        "program_ids": [
+          "PROG-CS-BS",
+          "PROG-CS-MS"
+        ]
+      },
+      "professor_data": {
+        "professor_id": "PROF-002",
+        "department_id": "DEPT-CS",
+        "first_name": "Jane",
+        "last_name": "Smith",
+        "email": "jane.smith@example.com"
+      },
+      "time_slot_data": {
+        "timeslot_id": "TS-005",
+        "name": "Morning 1",
+        "start_time": "09:10:00",
+        "end_time": "10:05:00",
+        "duration_minutes": 55,
+        "day_of_week": "Tuesday"
+      }
+    },
+    {
+      "scheduled_course_id": "SC-0259a75f",
+      "schedule_id": "SCH-12345678",
+      "course_id": "COURSE-002",
+      "professor_id": "PROF-001",
+      "timeslot_id": "TS-002",
+      "day_of_week": "Monday",
+      "is_override": false,
+      "course_data": {
+        "course_id": "COURSE-002",
+        "course_name": "Data Structures",
+        "department_id": "DEPT-CS",
+        "duration_minutes": 55,
+        "is_core": true,
+        "department_name": "Computer Science",
+        "program_ids": [
+          "PROG-CS-BS"
+        ]
+      },
+      "professor_data": {
+        "professor_id": "PROF-001",
+        "department_id": "DEPT-CS",
+        "first_name": "John",
+        "last_name": "Doe",
+        "email": "john.doe@example.com"
+      },
+      "time_slot_data": {
+        "timeslot_id": "TS-002",
+        "name": "Morning 2",
+        "start_time": "10:20:00",
+        "end_time": "11:15:00",
+        "duration_minutes": 55,
+        "day_of_week": "Monday"
+      }
+    },
+    {
+      "scheduled_course_id": "SC-cc201e68",
+      "schedule_id": "SCH-12345678",
+      "course_id": "COURSE-003",
+      "professor_id": "PROF-002",
+      "timeslot_id": "TS-003",
+      "day_of_week": "Monday",
+      "is_override": false,
+      "course_data": {
+        "course_id": "COURSE-003",
+        "course_name": "Algorithms",
+        "department_id": "DEPT-CS",
+        "duration_minutes": 85,
+        "is_core": true,
+        "department_name": "Computer Science",
+        "program_ids": [
+          "PROG-CS-MS"
+        ]
+      },
+      "professor_data": {
+        "professor_id": "PROF-002",
+        "department_id": "DEPT-CS",
+        "first_name": "Jane",
+        "last_name": "Smith",
+        "email": "jane.smith@example.com"
+      },
+      "time_slot_data": {
+        "timeslot_id": "TS-003",
+        "name": "Afternoon 1",
+        "start_time": "12:45:00",
+        "end_time": "14:05:00",
+        "duration_minutes": 80,
+        "day_of_week": "Monday"
+      }
+    },
+    {
+      "scheduled_course_id": "SC-21b13d72",
+      "schedule_id": "SCH-12345678",
+      "course_id": "COURSE-004",
+      "professor_id": "PROF-001",
+      "timeslot_id": "TS-006",
+      "day_of_week": "Tuesday",
+      "is_override": false,
+      "course_data": {
+        "course_id": "COURSE-004",
+        "course_name": "Database Systems",
+        "department_id": "DEPT-CS",
+        "duration_minutes": 85,
+        "is_core": false,
+        "department_name": "Computer Science",
+        "program_ids": [
+          "PROG-CS-BS",
+          "PROG-CS-MS"
+        ]
+      },
+      "professor_data": {
+        "professor_id": "PROF-001",
+        "department_id": "DEPT-CS",
+        "first_name": "John",
+        "last_name": "Doe",
+        "email": "john.doe@example.com"
+      },
+      "time_slot_data": {
+        "timeslot_id": "TS-006",
+        "name": "Afternoon 1",
+        "start_time": "12:45:00",
+        "end_time": "14:05:00",
+        "duration_minutes": 80,
+        "day_of_week": "Tuesday"
+      }
+    },
+    {
+      "scheduled_course_id": "SC-38444a83",
+      "schedule_id": "SCH-12345678",
+      "course_id": "COURSE-005",
+      "professor_id": "PROF-001",
+      "timeslot_id": "TS-004",
+      "day_of_week": "Monday",
+      "is_override": false,
+      "course_data": {
+        "course_id": "COURSE-005",
+        "course_name": "Machine Learning",
+        "department_id": "DEPT-CS",
+        "duration_minutes": 180,
+        "is_core": false,
+        "department_name": "Computer Science",
+        "program_ids": [
+          "PROG-CS-MS"
+        ]
+      },
+      "professor_data": {
+        "professor_id": "PROF-001",
+        "department_id": "DEPT-CS",
+        "first_name": "John",
+        "last_name": "Doe",
+        "email": "john.doe@example.com"
+      },
+      "time_slot_data": {
+        "timeslot_id": "TS-004",
+        "name": "Evening",
+        "start_time": "17:30:00",
+        "end_time": "20:30:00",
+        "duration_minutes": 180,
+        "day_of_week": "Monday"
+      }
+    }
+  ],
+  "conflicts": [],
+  "statistics": {
+    "total_courses": 5,
+    "scheduled_courses": 5,
+    "unresolved_conflicts": 0,
+    "core_courses": 3,
+    "core_courses_scheduled": 3,
+    "solver_status": "OPTIMAL",
+    "solver_time": 0.0119833
+  }
+}
