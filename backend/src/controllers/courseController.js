@@ -2,7 +2,9 @@
 
 const { Op } = require('sequelize');
 
-const { Course, Department, Program, CourseProgram, CoursePrerequisite } = require('../models');
+//const { Course, Department, Program, CourseProgram, CoursePrerequisite } = require('../models');
+const { Course, Department, Program, CourseProgram, CoursePrerequisite } = require('../../app/models');
+
 const { v4: uuidv4 } = require('uuid');
 
 // Get all courses

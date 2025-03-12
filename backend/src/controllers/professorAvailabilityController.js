@@ -1,7 +1,9 @@
 // professorAvailabilityController.js
 // Place this in: /backend/src/controllers/professorAvailabilityController.js
 
-const { ProfessorAvailability, Professor, TimeSlot } = require('../models');
+//const { ProfessorAvailability, Professor, TimeSlot } = require('../models');
+
+const { ProfessorAvailability, Professor, TimeSlot } = require('../../app/models');
 const { v4: uuidv4 } = require('uuid');
 
 // Get all time slots with availability for a professor

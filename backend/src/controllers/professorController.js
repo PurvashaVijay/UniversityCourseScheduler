@@ -1,5 +1,7 @@
 // professorController.js
-const { Professor, Department } = require('../models');
+//const { Professor, Department } = require('../models');
+
+const { Professor, Department } = require('../../app/models');
 const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
 

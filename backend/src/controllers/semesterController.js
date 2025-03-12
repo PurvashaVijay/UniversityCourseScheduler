@@ -1,5 +1,6 @@
 // semesterController.js
-const { Semester, Schedule } = require('../models');
+//const { Semester, Schedule } = require('../models');
+const { Semester, Schedule } = require('../../app/models');
 const { v4: uuidv4 } = require('uuid');
 const { Op } = require('sequelize');
 

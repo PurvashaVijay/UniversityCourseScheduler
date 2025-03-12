@@ -1,5 +1,6 @@
 const { DataTypes, Model } = require('sequelize');
-const sequelize = require('../../src/config/database');
+//const { sequelize } = require('../../src/config/database');
+const sequelize = require('../../src/config/database').sequelize;
 
 class Department extends Model {}
 
@@ -29,7 +30,7 @@ Department.init({
   sequelize,
   modelName: 'department',
   tableName: 'department',
-  timestamps: false // We'll handle timestamps manually to match your schema
+  timestamps: false
 });
 
 module.exports = Department;

@@ -1,7 +1,7 @@
 // schedulerService.js
 const { Course, Professor, TimeSlot, ProfessorAvailability, 
   Schedule, ScheduledCourse, Conflict, ConflictCourse,
-  Department, Program } = require('../models');
+  Department, Program } = require('../../app/models');
 const { v4: uuidv4 } = require('uuid');
 const { spawn } = require('child_process');
 const path = require('path');

@@ -17,3 +17,4 @@ router.put('/:id', authenticate, authorize('admin'), departmentController.update
 router.delete('/:id', authenticate, authorize('admin'), departmentController.deleteDepartment);
 
 module.exports = router;
+

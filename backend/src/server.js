@@ -2,6 +2,9 @@ const express = require('express');
 const cors = require('cors');
 const { testConnection } = require('./config/database');
 const departmentRoutes = require('./routes/departmentRoutes');
+// Near the top with your other requires
+const tempAuthRoutes = require('./routes/tempAuth');
+const testRoutes = require('./routes/test');
 
 // Create Express app
 const app = express();
@@ -33,6 +36,10 @@ app.use('/api/schedules', require('./routes/scheduleRoutes'));
 app.use('/api/scheduler', require('./routes/schedulerRoutes'));
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api', require('./routes/scheduledCourseRoutes'));
+
+// With your other app.use statements
+app.use('/api/auth', tempAuthRoutes);
+app.use('/api/test', testRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

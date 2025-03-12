@@ -8,6 +8,7 @@
     "bcrypt": "^5.1.1",
     "child_process": "^1.0.2",
     "date-fns": "^4.1.0",
+    "dotenv": "^16.4.7",
     "formik": "^2.4.6",
     "fs": "^0.0.1-security",
     "mongoose": "^8.12.1",
@@ -18,5 +19,8 @@
     "sequelize": "^6.37.6",
     "uuid": "^11.1.0",
     "yup": "^1.6.1"
+  },
+  "scripts": {
+    "start": "set \"OPENSSL_CONF=\" && set \"NODE_OPTIONS=--openssl-legacy-provider\" && set PORT=3001 && react-scripts start"
   }
 }
