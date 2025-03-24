@@ -21,9 +21,13 @@ import {
   CircularProgress
 } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
-import udLogo from '../../assets/ud-logo.png';
+//import udLogo from '../../assets/ud-logo.png';
+//import authService from '../../services/authService';
+// Remove the dot-slash prefix, just use the filename directly
 import authService from '../../services/authService';
 import { useNavigate } from 'react-router-dom';
+const udLogo = require('./ud-logo.png').default || require('./ud-logo.png');
+
 
 const Login: React.FC = () => {
   const navigate = useNavigate(); // <-- Moved to the top level of the component
@@ -38,7 +42,7 @@ const Login: React.FC = () => {
   const [alertOpen, setAlertOpen] = useState<boolean>(false);
   const [alertMessage, setAlertMessage] = useState<string>('');
   const [alertSeverity, setAlertSeverity] = useState<'success' | 'error'>('error');
-
+ /*
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -82,6 +86,49 @@ const Login: React.FC = () => {
       setIsLoading(false);
     }
   };
+ */
+  // Add this new handleSubmit function
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    
+    try {
+      // Use temp login for testing
+      console.log("Attempting temp login with:", email);
+      const result = await authService.tempLogin(email);
+      
+      if (result.success) {
+        // Show success message
+        setAlertSeverity('success');
+        setAlertMessage('Login successful! Redirecting...');
+        setAlertOpen(true);
+        
+        console.log('Login successful:', result.user);
+        
+        // Simulate redirect after 2 seconds
+        setTimeout(() => {
+          if (role === 'admin') {
+            navigate('/admin'); 
+          } else {
+            navigate('/professor');
+          }
+        }, 2000);
+      } else {
+        // Show error message
+        setAlertSeverity('error');
+        setAlertMessage(result.message || 'Login failed');
+        setAlertOpen(true);
+      }
+    } catch (error) {
+      // Show generic error
+      setAlertSeverity('error');
+      setAlertMessage('An unexpected error occurred. Please try again.');
+      setAlertOpen(true);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
 
   return (
     <Box

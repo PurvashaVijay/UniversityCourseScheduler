@@ -1,5 +1,4 @@
 // src/components/admin/Dashboard.tsx
-
 import React, { useEffect, useState } from 'react';
 import { 
   Box, 
@@ -19,18 +18,13 @@ import WarningIcon from '@mui/icons-material/Warning';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
-// This would be connected to your actual API services
-const fetchDashboardData = async () => {
-  // This is a placeholder, you'd fetch real data from your API
-  return {
-    departments: 5,
-    programs: 12,
-    courses: 78,
-    professors: 60,
-    activeSchedules: 2,
-    pendingConflicts: 7,
-  };
-};
+// Import services
+import departmentService from '../../services/departmentService';
+import programService from '../../services/programService';
+import courseService from '../../services/courseService';
+import professorService from '../../services/professorService';
+import scheduleService from '../../services/scheduleService';
+import conflictService from '../../services/conflictService';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
@@ -47,8 +41,61 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const dashboardData = await fetchDashboardData();
-        setData(dashboardData);
+        setLoading(true);
+        
+        // Fetch real data from backend with error handling for each service
+        let departments: any[] = [];
+        try {
+          departments = await departmentService.getAllDepartments();
+        } catch (error) {
+          console.error('Error fetching departments:', error);
+        }
+        
+        let programs: any[] = [];
+        try {
+          programs = await programService.getAllPrograms();
+        } catch (error) {
+          console.error('Error fetching programs:', error);
+        }
+        
+        let courses: any[] = [];
+        try {
+          courses = await courseService.getAllCourses();
+        } catch (error) {
+          console.error('Error fetching courses:', error);
+        }
+        
+        let professors: any[] = [];
+        try {
+          professors = await professorService.getAllProfessors();
+        } catch (error) {
+          console.error('Error fetching professors:', error);
+        }
+        
+        // For scheduleService, we need to handle the case where the needed methods may not exist
+        let activeSchedules = 0;
+        try {
+          const schedules = await scheduleService.getAllSchedules();
+          activeSchedules = schedules.filter(s => s.is_active).length || 0;
+        } catch (error) {
+          console.error('Error fetching schedules:', error);
+        }
+        
+        let conflicts: any[] = [];
+        try {
+          conflicts = await conflictService.getAllConflicts();
+        } catch (error) {
+          console.error('Error fetching conflicts:', error);
+        }
+        
+        setData({
+          departments: departments.length,
+          programs: programs.length,
+          courses: courses.length,
+          professors: professors.length,
+          activeSchedules: activeSchedules,
+          pendingConflicts: conflicts.filter((c: any) => !c.is_resolved).length || 0,
+        });
       } catch (error) {
         console.error('Error loading dashboard data:', error);
       } finally {
@@ -212,13 +259,13 @@ const Dashboard: React.FC = () => {
               Generate New Schedule
             </Button>
             <Button 
-                variant="contained" 
-                component={Link} 
-                to="/admin/active-schedule"
-                sx={{ bgcolor: '#00539F' }}
-              >
-                View Active Schedule
-              </Button>
+              variant="contained" 
+              component={Link} 
+              to="/admin/active-schedule"
+              sx={{ bgcolor: '#00539F' }}
+            >
+              View Active Schedule
+            </Button>
           </Box>
         </Paper>
       </Box>

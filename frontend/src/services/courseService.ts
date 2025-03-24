@@ -11,7 +11,7 @@ export interface Course {
   updated_at: string;
 }
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
 
 const courseService = {
   getAllCourses: async (): Promise<Course[]> => {
@@ -31,22 +31,11 @@ const courseService = {
       return await response.json();
     } catch (error) {
       console.error('Error fetching courses:', error);
-      // Return mock data
-      return [
-        {
-          course_id: "COURSE-001",
-          department_id: "DEPT-001",
-          course_name: "Introduction to Programming",
-          duration_minutes: 55,
-          is_core: true,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }
-      ];
+      return [];
     }
   },
 
-  getCourseById: async (id: string): Promise<Course> => {
+  getCourseById: async (id: string): Promise<Course | null> => {
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`${API_URL}/courses/${id}`, {
@@ -63,16 +52,7 @@ const courseService = {
       return await response.json();
     } catch (error) {
       console.error(`Error fetching course ${id}:`, error);
-      // Return mock data
-      return {
-        course_id: id,
-        department_id: "DEPT-001",
-        course_name: "Sample Course",
-        duration_minutes: 60,
-        is_core: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
+      return null;
     }
   },
 
@@ -93,18 +73,7 @@ const courseService = {
       return await response.json();
     } catch (error) {
       console.error(`Error fetching courses for professor ${professorId}:`, error);
-      // Return mock data
-      return [
-        {
-          course_id: "COURSE-001",
-          department_id: "DEPT-001",
-          course_name: "Introduction to Programming",
-          duration_minutes: 55,
-          is_core: true,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }
-      ];
+      return [];
     }
   }
 };

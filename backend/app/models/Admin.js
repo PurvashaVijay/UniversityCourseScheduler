@@ -1,5 +1,5 @@
+// Updated Admin.js model
 const { DataTypes, Model } = require('sequelize');
-//const sequelize = require('../../src/config/database');
 const sequelize = require('../../src/config/database').sequelize;
 const bcrypt = require('bcrypt');
 
@@ -16,7 +16,7 @@ Admin.init({
   },
   department_id: {
     type: DataTypes.STRING(50),
-    allowNull: false,
+    allowNull: true, // Changed to allow null for super admin
     references: {
       model: 'department',
       key: 'department_id'
@@ -36,6 +36,13 @@ Admin.init({
     unique: true,
     validate: {
       isEmail: true
+    }
+  },
+  password: {
+    type: DataTypes.VIRTUAL,
+    allowNull: true,
+    validate: {
+      len: [6, 100]
     }
   },
   password_hash: {
@@ -59,15 +66,15 @@ Admin.init({
   timestamps: false,
   hooks: {
     beforeCreate: async (admin) => {
-      if (admin.password_hash) {
+      if (admin.password) {
         const salt = await bcrypt.genSalt(10);
-        admin.password_hash = await bcrypt.hash(admin.password_hash, salt);
+        admin.password_hash = await bcrypt.hash(admin.password, salt);
       }
     },
     beforeUpdate: async (admin) => {
-      if (admin.changed('password_hash')) {
+      if (admin.changed('password')) {
         const salt = await bcrypt.genSalt(10);
-        admin.password_hash = await bcrypt.hash(admin.password_hash, salt);
+        admin.password_hash = await bcrypt.hash(admin.password, salt);
       }
     }
   }

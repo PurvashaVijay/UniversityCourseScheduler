@@ -82,6 +82,22 @@ const App: React.FC = () => {
             <Route path="/unauthorized" element={<Unauthorized />} />
 
             
+            {/* Direct routes for redirects from login */}
+            <Route path="/admin/dashboard" element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminLayout >
+                  <Dashboard />
+                </AdminLayout >
+              </ProtectedRoute>
+            } />
+
+            <Route path="/professor/dashboard" element={
+              <ProtectedRoute allowedRoles={['professor']}>
+                <AdminLayout >
+                  <Dashboard />
+                </AdminLayout >
+              </ProtectedRoute>
+            } />
 
             {/* Admin routes - FIXED NESTING */}
 

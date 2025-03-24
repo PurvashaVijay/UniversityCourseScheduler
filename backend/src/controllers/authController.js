@@ -1,4 +1,4 @@
-// authController.js
+  // authController.js
 // Place this in: /backend/src/controllers/authController.js
 
 const { Admin, Professor } = require('../models');
@@ -10,6 +10,8 @@ exports.adminLogin = async (req, res) => {
   try {
     const { email, password } = req.body;
     
+    console.log('Login attempt:', { email, password }); // Log credentials for debugging
+    
     // Validate input
     if (!email || !password) {
       return res.status(400).json({ message: 'Email and password are required' });
@@ -18,13 +20,18 @@ exports.adminLogin = async (req, res) => {
     // Find the admin by email
     const admin = await Admin.findOne({ where: { email } });
     
+    // Log if admin was found
+    console.log('Admin found:', admin ? 'Yes' : 'No');
+    
     // Check if admin exists
     if (!admin) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
     
-    // Validate password
+    // Validate password - Add logging here
     const isPasswordValid = await admin.validatePassword(password);
+    console.log('Password validation result:', isPasswordValid);
+    
     if (!isPasswordValid) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }

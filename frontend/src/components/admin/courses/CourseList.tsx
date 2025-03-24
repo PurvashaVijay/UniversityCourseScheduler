@@ -23,8 +23,11 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import SearchIcon from '@mui/icons-material/Search';
 import { useNavigate } from 'react-router-dom';
-import DataTable from '../../common/DataTable';
-import ConfirmDialog from '../../common/ConfirmDialog';
+//import DataTable from '../../common/DataTable';
+//import ConfirmDialog from '../../common/ConfirmDialog';
+import DataTable from '../../../components/common/DataTable';
+import ConfirmDialog from '../../../components/common/ConfirmDialog';
+
 
 // Mock data functions (replace with actual API calls later)
 const fetchDepartments = async () => {

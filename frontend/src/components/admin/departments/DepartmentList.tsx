@@ -1,38 +1,18 @@
 // src/components/admin/departments/DepartmentList.tsx
-
 import React, { useState, useEffect } from 'react';
 import { 
   Box, 
   Button, 
   Typography, 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  Paper, 
   Snackbar, 
   Alert,
   CircularProgress
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import { useNavigate } from 'react-router-dom';
-import DataTable from '../../common/DataTable';
-import ConfirmDialog from '../../common/ConfirmDialog';
-
-// This would come from your actual departmentService
-const fetchDepartments = async () => {
-  // Mock data for demonstration
-  return [
-    { id: 'DEPT-001', department_id: 'DEPT-001', name: 'Computer Science', description: 'CS Department' },
-    { id: 'DEPT-002', department_id: 'DEPT-002', name: 'Economics', description: 'Economics Department' },
-    { id: 'DEPT-003', department_id: 'DEPT-003', name: 'Mathematics', description: 'Mathematics Department' },
-    { id: 'DEPT-004', department_id: 'DEPT-004', name: 'Physics', description: 'Physics Department' },
-    { id: 'DEPT-005', department_id: 'DEPT-005', name: 'Business Administration', description: 'Business Administration Department' },
-  ];
-};
-
-// Mock delete function
-const deleteDepartments = async (ids: string[]) => {
-  console.log('Deleting departments:', ids);
-  return { success: true, message: 'Departments deleted successfully' };
-};
+import DataTable from '../../../components/common/DataTable';
+import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import departmentService from '../../../services/departmentService';
 
 const DepartmentList: React.FC = () => {
   const navigate = useNavigate();
@@ -52,7 +32,7 @@ const DepartmentList: React.FC = () => {
     const loadDepartments = async () => {
       try {
         setLoading(true);
-        const data = await fetchDepartments();
+        const data = await departmentService.getAllDepartments();
         setDepartments(data);
       } catch (error) {
         console.error('Error loading departments:', error);
@@ -86,26 +66,26 @@ const DepartmentList: React.FC = () => {
 
   const handleDeleteConfirm = async () => {
     try {
-      const result = await deleteDepartments(departmentsToDelete);
-      
-      if (result.success) {
-        // Remove deleted departments from state
-        setDepartments(departments.filter(
-          dept => !departmentsToDelete.includes(dept.id)
-        ));
-        
-        setSnackbar({
-          open: true,
-          message: result.message,
-          severity: 'success'
-        });
+      if (departmentsToDelete.length > 1) {
+        // Use batch delete if available
+        await departmentService.deleteDepartments(departmentsToDelete);
       } else {
-        setSnackbar({
-          open: true,
-          message: result.message || 'Failed to delete departments',
-          severity: 'error'
-        });
+        // Delete one by one
+        for (const id of departmentsToDelete) {
+          await departmentService.deleteDepartment(id);
+        }
       }
+      
+      // Remove deleted departments from state
+      setDepartments(prev => prev.filter(
+        dept => !departmentsToDelete.includes(dept.department_id)
+      ));
+      
+      setSnackbar({
+        open: true,
+        message: 'Departments deleted successfully',
+        severity: 'success'
+      });
     } catch (error) {
       console.error('Error deleting departments:', error);
       setSnackbar({

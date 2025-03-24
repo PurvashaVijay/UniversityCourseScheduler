@@ -1,5 +1,4 @@
 // src/components/admin/departments/DepartmentForm.tsx
-
 import React, { useState, useEffect } from 'react';
 import { 
   Box, 
@@ -16,24 +15,9 @@ import {
 import SaveIcon from '@mui/icons-material/Save';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { TextInput } from '../../common/FormComponents';
-import { v4 as uuidv4 } from 'uuid'; // You'll need to install this package
-
-// Mock functions for API calls
-const fetchDepartment = async (id: string) => {
-  // In a real app, this would fetch from your API
-  return {
-    department_id: id,
-    name: 'Sample Department',
-    description: 'This is a sample department description.'
-  };
-};
-
-const saveDepartment = async (department: any) => {
-  console.log('Saving department:', department);
-  // In a real app, this would call your API
-  return { success: true, department };
-};
+import { TextInput } from '../../../components/common/FormComponents';
+import { v4 as uuidv4 } from 'uuid';
+import departmentService from '../../../services/departmentService';
 
 const DepartmentForm: React.FC = () => {
   const navigate = useNavigate();
@@ -55,7 +39,8 @@ const DepartmentForm: React.FC = () => {
     if (isEditing) {
       const loadDepartment = async () => {
         try {
-          const data = await fetchDepartment(id!);
+          setLoading(true);
+          const data = await departmentService.getDepartmentById(id!);
           setDepartment(data);
         } catch (error) {
           console.error('Error loading department:', error);
@@ -71,13 +56,14 @@ const DepartmentForm: React.FC = () => {
 
       loadDepartment();
     } else {
-      // For new departments, generate a unique ID using functional update
+      // For new departments, generate a unique ID
       setDepartment(prevDept => ({
         ...prevDept,
-        department_id: `DEPT-${uuidv4().substring(0, 8)}`
+        department_id: `DEPT-${uuidv4().substring(0, 8).toUpperCase()}`
       }));
+      setLoading(false);
     }
-  }, [id, isEditing]); // Removed department from dependencies
+  }, [id, isEditing]);
 
   const validateForm = () => {
     const newErrors: {[key: string]: string} = {};
@@ -92,27 +78,30 @@ const DepartmentForm: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+  
     if (!validateForm()) {
       return;
     }
-    
+  
     try {
       setSaving(true);
-      const result = await saveDepartment(department);
-      
-      if (result.success) {
-        setSnackbar({
-          open: true,
-          message: `Department ${isEditing ? 'updated' : 'created'} successfully`,
-          severity: 'success'
-        });
-        
-        // Navigate back after a brief delay
-        setTimeout(() => {
-          navigate('/admin/departments');
-        }, 1500);
+    
+      if (isEditing) {
+        await departmentService.updateDepartment(id!, department);
+      } else {
+        await departmentService.createDepartment(department);
       }
+    
+      setSnackbar({
+        open: true,
+        message: `Department ${isEditing ? 'updated' : 'created'} successfully`,
+        severity: 'success'
+      });
+    
+      // Navigate back after a brief delay
+      setTimeout(() => {
+        navigate('/admin/departments');
+      }, 1500);
     } catch (error) {
       console.error('Error saving department:', error);
       setSnackbar({

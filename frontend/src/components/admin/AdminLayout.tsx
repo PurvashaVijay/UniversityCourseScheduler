@@ -21,9 +21,10 @@ import MenuIcon from '@mui/icons-material/Menu';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import ExitToAppIcon from '@mui/icons-material/ExitToApp';
 import { useNavigate, Outlet, Link } from 'react-router-dom';
+//import { useAuth } from '../../contexts/AuthContext';
+//import udLogo from 'frontend\src\assets\ud-logo.png';
 import { useAuth } from '../../contexts/AuthContext';
-import udLogo from '../../assets/ud-logo.png';
-
+const udLogo = require('./ud-logo.png').default || require('./ud-logo.png');
 interface AdminLayoutProps {
   children?: React.ReactNode;
 }

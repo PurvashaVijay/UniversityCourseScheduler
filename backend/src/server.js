@@ -1,16 +1,22 @@
 const express = require('express');
 const cors = require('cors');
-const { testConnection } = require('./config/database');
-const departmentRoutes = require('./routes/departmentRoutes');
-// Near the top with your other requires
-const tempAuthRoutes = require('./routes/tempAuth');
-const testRoutes = require('./routes/test');
 
-// Create Express app
+// Create Express app FIRST, before using it
 const app = express();
 
+// Near the top of server.js after creating the app
+app.use(cors({
+  origin: ['http://localhost:3000', 'http://localhost:3001'],
+  credentials: true
+}));
+
+const { testConnection } = require('./config/database');
+const departmentRoutes = require('./routes/departmentRoutes');
+const testRoutes = require('./routes/test');
+// Near the top with your other requires
+const tempAuthRoutes = require('./routes/tempAuth');
+
 // Middleware
-app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -40,6 +46,7 @@ app.use('/api', require('./routes/scheduledCourseRoutes'));
 // With your other app.use statements
 app.use('/api/auth', tempAuthRoutes);
 app.use('/api/test', testRoutes);
+app.use('/api/auth', tempAuthRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

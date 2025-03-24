@@ -23,8 +23,11 @@ import {
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+//import { Link, useNavigate, useParams } from 'react-router-dom';
+//import ConfirmDialog from '../../common/ConfirmDialog';
+// To
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import ConfirmDialog from '../../common/ConfirmDialog';
+import ConfirmDialog from '../../../components/common/ConfirmDialog';
 
 // Mock API functions
 const fetchDepartmentDetails = async (id: string) => {

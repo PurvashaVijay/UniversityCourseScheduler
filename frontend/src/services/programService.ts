@@ -3,7 +3,7 @@
 import { v4 as uuidv4 } from 'uuid';
 
 // Define the base API URL
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
 
 // Types
 export interface Program {
@@ -39,7 +39,7 @@ export const getAllPrograms = async (): Promise<Program[]> => {
     return data;
   } catch (error) {
     console.error('Error in getAllPrograms:', error);
-    throw error;
+    return [];
   }
 };
 
@@ -62,12 +62,12 @@ export const getProgramsByDepartment = async (departmentId: string): Promise<Pro
     return data;
   } catch (error) {
     console.error(`Error in getProgramsByDepartment for departmentId ${departmentId}:`, error);
-    throw error;
+    return [];
   }
 };
 
 // Fetch a single program by ID
-export const getProgramById = async (id: string): Promise<ProgramDetail> => {
+export const getProgramById = async (id: string): Promise<ProgramDetail | null> => {
   try {
     const token = localStorage.getItem('token');
     const response = await fetch(`${API_URL}/programs/${id}`, {
@@ -85,7 +85,7 @@ export const getProgramById = async (id: string): Promise<ProgramDetail> => {
     return data;
   } catch (error) {
     console.error(`Error in getProgramById for ID ${id}:`, error);
-    throw error;
+    return null;
   }
 };
 
@@ -197,3 +197,15 @@ export const deletePrograms = async (ids: string[]): Promise<{ success: boolean;
     throw error;
   }
 };
+
+const programService = {
+  getAllPrograms,
+  getProgramsByDepartment,
+  getProgramById,
+  createProgram,
+  updateProgram,
+  deleteProgram,
+  deletePrograms
+};
+
+export default programService;
