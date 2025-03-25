@@ -17,14 +17,14 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { TextInput } from '../../../components/common/FormComponents';
 import { v4 as uuidv4 } from 'uuid';
-import departmentService from '../../../services/departmentService';
+import departmentService, { DepartmentDetail } from '../../../services/departmentService';
 
 const DepartmentForm: React.FC = () => {
   const navigate = useNavigate();
-  const { id } = useParams<{ id: string }>();
+  const { id } = useParams<{ id?: string }>();
   const isEditing = Boolean(id);
   
-  const [department, setDepartment] = useState({
+  const [department, setDepartment] = useState<DepartmentDetail>({
     department_id: '',
     name: '',
     description: ''
@@ -36,17 +36,23 @@ const DepartmentForm: React.FC = () => {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
   useEffect(() => {
-    if (isEditing) {
+    if (isEditing && id) {
       const loadDepartment = async () => {
         try {
           setLoading(true);
-          const data = await departmentService.getDepartmentById(id!);
-          setDepartment(data);
+          console.log(`Loading department with ID: ${id} for editing`);
+          const data = await departmentService.getDepartmentById(id);
+          console.log('Department data loaded:', data);
+          setDepartment({
+            department_id: data.department_id,
+            name: data.name,
+            description: data.description || ''
+          });
         } catch (error) {
-          console.error('Error loading department:', error);
+          console.error('Error loading department for edit:', error);
           setSnackbar({
             open: true,
-            message: 'Failed to load department',
+            message: error instanceof Error ? error.message : 'Failed to load department',
             severity: 'error'
           });
         } finally {
@@ -85,10 +91,17 @@ const DepartmentForm: React.FC = () => {
   
     try {
       setSaving(true);
-    
-      if (isEditing) {
-        await departmentService.updateDepartment(id!, department);
+      console.log('Submitting department data:', department);
+      
+      if (isEditing && id) {
+        console.log(`Updating department with ID: ${id}`);
+        const dataToUpdate = {
+          name: department.name,
+          description: department.description
+        };
+        await departmentService.updateDepartment(id, dataToUpdate);
       } else {
+        console.log('Creating new department');
         await departmentService.createDepartment(department);
       }
     
@@ -103,10 +116,10 @@ const DepartmentForm: React.FC = () => {
         navigate('/admin/departments');
       }, 1500);
     } catch (error) {
-      console.error('Error saving department:', error);
+      console.error('Error details:', error);
       setSnackbar({
         open: true,
-        message: `Failed to ${isEditing ? 'update' : 'create'} department`,
+        message: error instanceof Error ? error.message : `Failed to ${isEditing ? 'update' : 'create'} department`,
         severity: 'error'
       });
     } finally {
@@ -181,7 +194,7 @@ const DepartmentForm: React.FC = () => {
               <TextInput
                 id="name"
                 label="Department Name"
-                value={department.name}
+                value={department.name || ''}
                 onChange={handleChange('name')}
                 error={errors.name}
                 required
@@ -191,7 +204,7 @@ const DepartmentForm: React.FC = () => {
               <TextInput
                 id="description"
                 label="Description"
-                value={department.description}
+                value={department.description || ''} 
                 onChange={handleChange('description')}
                 error={errors.description}
                 multiline

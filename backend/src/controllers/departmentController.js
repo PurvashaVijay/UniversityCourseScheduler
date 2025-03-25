@@ -72,7 +72,10 @@ exports.deleteDepartment = async (req, res) => {
 };
 */
 
-const Department = require('../../app/models/Department');
+//const Department = require('../../app/models/Department');
+
+const models = require('../../app/models');
+const Department = models.Department; 
 const { v4: uuidv4 } = require('uuid');
 
 // Get all departments
@@ -144,11 +147,14 @@ exports.createDepartment = async (req, res) => {
 exports.updateDepartment = async (req, res) => {
   try {
     const { id } = req.params;
+    console.log('Updating department with ID:', id);
+    
     const { name, description } = req.body;
     
     // Find the department
     const department = await Department.findByPk(id);
     if (!department) {
+      console.log('Department not found with ID:', id);
       return res.status(404).json({ message: 'Department not found' });
     }
     
@@ -166,7 +172,11 @@ exports.updateDepartment = async (req, res) => {
     if (name) department.name = name;
     if (description !== undefined) department.description = description;
     
+    // Update the updated_at timestamp
+    department.updated_at = new Date();
+    
     await department.save();
+    console.log('Department updated successfully:', department.toJSON());
     
     return res.status(200).json(department);
   } catch (error) {
@@ -179,17 +189,29 @@ exports.updateDepartment = async (req, res) => {
 exports.deleteDepartment = async (req, res) => {
   try {
     const { id } = req.params;
+    console.log('Backend received delete request for department ID:', id);
     
+    // Validate ID format
+    if (!id || id === 'undefined') {
+      console.error('Invalid department ID provided:', id);
+      return res.status(400).json({ 
+        message: 'Invalid department ID provided',
+        received: id 
+      });
+    }
+
     // Find the department
     const department = await Department.findByPk(id);
+    console.log('Department lookup result:', department ? 'Found' : 'Not found');
+    
     if (!department) {
+      console.log('Department not found with ID:', id);
       return res.status(404).json({ message: 'Department not found' });
     }
     
-    // TODO: Check if department has related records (programs, courses, etc.)
-    // If so, you might want to prevent deletion to maintain data integrity
-    
     await department.destroy();
+    console.log('Department deleted successfully:', id);
+    
     return res.status(200).json({ 
       message: 'Department deleted successfully',
       deleted: true 
