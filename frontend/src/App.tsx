@@ -35,9 +35,9 @@ import CourseDetails from './components/admin/courses/CourseDetails';
 // Admin components - Professors
 import ProfessorList from './components/admin/professors/ProfessorList';
 import ProfessorDetails from './components/admin/professors/ProfessorDetails';
-// Admin components - ActiveSchedule
-import ActiveSchedule from './components/admin/schedule/ActiveSchedule';
 
+// Admin components - ScheduleView
+import ScheduleView from './components/admin/schedule/ScheduleView';
 // Create theme with University of Delaware colors
 const theme = createTheme({
   palette: {
@@ -82,22 +82,6 @@ const App: React.FC = () => {
             <Route path="/unauthorized" element={<Unauthorized />} />
 
             
-            {/* Direct routes for redirects from login */}
-            <Route path="/admin/dashboard" element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <AdminLayout >
-                  <Dashboard />
-                </AdminLayout >
-              </ProtectedRoute>
-            } />
-
-            <Route path="/professor/dashboard" element={
-              <ProtectedRoute allowedRoles={['professor']}>
-                <AdminLayout >
-                  <Dashboard />
-                </AdminLayout >
-              </ProtectedRoute>
-            } />
 
             {/* Admin routes - FIXED NESTING */}
 
@@ -163,7 +147,8 @@ const App: React.FC = () => {
 
               {/* Active Schedule routes */}
 
-              <Route path="active-schedule" element={<ActiveSchedule />} />
+              <Route path="schedules" element={<ScheduleView />} />
+              <Route path="schedules/:id" element={<ScheduleView />} />
 
             </Route>
 
