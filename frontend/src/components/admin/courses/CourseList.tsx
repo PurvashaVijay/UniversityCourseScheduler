@@ -62,19 +62,19 @@ const fetchCourses = async (programId: string) => {
   // This would be an API call to get courses for a specific program
   const coursesMap: { [key: string]: any[] } = {
     'PROG-001': [
-      { id: 'COURSE-001', course_id: 'CS101', program_id: 'PROG-001', name: 'Introduction to Programming', description: 'Basic programming concepts', duration_minutes: 55, is_core: true },
-      { id: 'COURSE-002', course_id: 'CS201', program_id: 'PROG-001', name: 'Data Structures', description: 'Advanced data structures', duration_minutes: 55, is_core: true },
-      { id: 'COURSE-003', course_id: 'CS301', program_id: 'PROG-001', name: 'Algorithms', description: 'Algorithm design and analysis', duration_minutes: 80, is_core: true },
-      { id: 'COURSE-004', course_id: 'CS401', program_id: 'PROG-001', name: 'Web Development', description: 'Web technologies and frameworks', duration_minutes: 80, is_core: false }
+      { id: 'COURSE-001', course_id: 'CS101', program_id: 'PROG-001', name: 'Introduction to Programming', duration_minutes: 55, is_core: true },
+      { id: 'COURSE-002', course_id: 'CS201', program_id: 'PROG-001', name: 'Data Structures', duration_minutes: 55, is_core: true },
+      { id: 'COURSE-003', course_id: 'CS301', program_id: 'PROG-001', name: 'Algorithms',  duration_minutes: 80, is_core: true },
+      { id: 'COURSE-004', course_id: 'CS401', program_id: 'PROG-001', name: 'Web Development',duration_minutes: 80, is_core: false }
     ],
     'PROG-002': [
-      { id: 'COURSE-005', course_id: 'CS501', program_id: 'PROG-002', name: 'Advanced Algorithms', description: 'Complex algorithms and optimization', duration_minutes: 80, is_core: true },
-      { id: 'COURSE-006', course_id: 'CS601', program_id: 'PROG-002', name: 'Machine Learning', description: 'ML concepts and applications', duration_minutes: 80, is_core: true },
-      { id: 'COURSE-007', course_id: 'CS701', program_id: 'PROG-002', name: 'Big Data Analytics', description: 'Big data processing frameworks', duration_minutes: 180, is_core: false }
+      { id: 'COURSE-005', course_id: 'CS501', program_id: 'PROG-002', name: 'Advanced Algorithms', duration_minutes: 80, is_core: true },
+      { id: 'COURSE-006', course_id: 'CS601', program_id: 'PROG-002', name: 'Machine Learning',  duration_minutes: 80, is_core: true },
+      { id: 'COURSE-007', course_id: 'CS701', program_id: 'PROG-002', name: 'Big Data Analytics',  duration_minutes: 180, is_core: false }
     ],
     'PROG-003': [
-      { id: 'COURSE-008', course_id: 'ECON101', program_id: 'PROG-003', name: 'Principles of Economics', description: 'Basic economic principles', duration_minutes: 55, is_core: true },
-      { id: 'COURSE-009', course_id: 'ECON201', program_id: 'PROG-003', name: 'Microeconomics', description: 'Study of market behavior', duration_minutes: 55, is_core: true }
+      { id: 'COURSE-008', course_id: 'ECON101', program_id: 'PROG-003', name: 'Principles of Economics',  duration_minutes: 55, is_core: true },
+      { id: 'COURSE-009', course_id: 'ECON201', program_id: 'PROG-003', name: 'Microeconomics',  duration_minutes: 55, is_core: true }
     ]
   };
   
@@ -106,7 +106,6 @@ const CourseList: React.FC = () => {
     { id: 'course_id', label: 'Course ID', minWidth: 100 },
     { id: 'program_id', label: 'Program ID', minWidth: 100 },
     { id: 'name', label: 'Name', minWidth: 170 },
-    { id: 'description', label: 'Description', minWidth: 200 },
     { 
       id: 'duration_minutes', 
       label: 'Duration (min)', 
@@ -311,7 +310,7 @@ const CourseList: React.FC = () => {
                 disabled={loadingDepartments}
               >
                 <MenuItem value="">
-                  <em>Please select a department</em>
+                  <em>Select a department</em>
                 </MenuItem>
                 {departments.map((dept) => (
                   <MenuItem key={dept.department_id} value={dept.department_id}>
@@ -333,7 +332,7 @@ const CourseList: React.FC = () => {
                 disabled={!selectedDepartment || loadingPrograms}
               >
                 <MenuItem value="">
-                  <em>Please select a program</em>
+                  <em>Select a program</em>
                 </MenuItem>
                 {programs.map((prog) => (
                   <MenuItem key={prog.program_id} value={prog.program_id}>

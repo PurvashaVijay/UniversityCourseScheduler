@@ -5,7 +5,7 @@ import {
   Box, 
   Typography, 
   Paper, 
-  Divider, 
+  //Divider, 
   Grid,
   Button,
   Chip,
@@ -31,7 +31,6 @@ const fetchCourseDetails = async (id: string) => {
       course_id: 'CS101', 
       program_id: 'PROG-001', 
       name: 'Introduction to Programming', 
-      description: 'Basic programming concepts and an introduction to Python programming language. Topics include variables, data types, control structures, functions, and basic algorithms.',
       duration_minutes: 55, 
       is_core: true,
       program: { program_id: 'PROG-001', name: 'Bachelor of Science in Computer Science' },
@@ -42,7 +41,6 @@ const fetchCourseDetails = async (id: string) => {
       course_id: 'CS201', 
       program_id: 'PROG-001', 
       name: 'Data Structures', 
-      description: 'Advanced data structures including arrays, linked lists, stacks, queues, trees, and graphs. Implementation and analysis of fundamental algorithms.',
       duration_minutes: 55, 
       is_core: true,
       program: { program_id: 'PROG-001', name: 'Bachelor of Science in Computer Science' },
@@ -229,16 +227,7 @@ const CourseDetails: React.FC = () => {
                 <Typography variant="h6">
                   {course.duration_minutes} minutes
                 </Typography>
-              </Grid>
-              <Grid item xs={12}>
-                <Divider sx={{ my: 1 }} />
-                <Typography variant="subtitle2" color="text.secondary">
-                  Description
-                </Typography>
-                <Typography variant="body1">
-                  {course.description || 'No description provided'}
-                </Typography>
-              </Grid>
+              </Grid> 
             </Grid>
           </Paper>
     

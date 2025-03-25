@@ -48,7 +48,6 @@ const fetchCourse = async (id: string) => {
       course_id: 'CS101', 
       program_id: 'PROG-001', 
       name: 'Introduction to Programming', 
-      description: 'Basic programming concepts', 
       duration_minutes: 55, 
       is_core: true 
     },
@@ -56,8 +55,7 @@ const fetchCourse = async (id: string) => {
       id: 'COURSE-002', 
       course_id: 'CS201', 
       program_id: 'PROG-001', 
-      name: 'Data Structures', 
-      description: 'Advanced data structures', 
+      name: 'Data Structures',  
       duration_minutes: 55, 
       is_core: true 
     },
@@ -65,8 +63,7 @@ const fetchCourse = async (id: string) => {
       id: 'COURSE-005', 
       course_id: 'CS501', 
       program_id: 'PROG-002', 
-      name: 'Advanced Algorithms', 
-      description: 'Complex algorithms and optimization', 
+      name: 'Advanced Algorithms',  
       duration_minutes: 80, 
       is_core: true 
     }
@@ -358,17 +355,7 @@ const CourseForm: React.FC = () => {
                 required
               />
             </Grid>
-            <Grid item xs={12}>
-              <TextInput
-                id="description"
-                label="Description"
-                value={course.description}
-                onChange={handleChange('description')}
-                error={errors.description}
-                multiline
-                rows={3}
-              />
-            </Grid>
+            
             <Grid item xs={12} md={6}>
               <NumberInput
                 id="duration_minutes"
