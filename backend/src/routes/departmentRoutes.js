@@ -15,6 +15,8 @@ router.get('/:id', authenticate, departmentController.getDepartmentById);
 router.post('/', authenticate, authorize('admin'), departmentController.createDepartment);
 router.put('/:id', authenticate, authorize('admin'), departmentController.updateDepartment);
 router.delete('/:id', authenticate, authorize('admin'), departmentController.deleteDepartment);
+// This should be in your departmentRoutes.js file
+//router.delete('/:id', authMiddleware.authenticate, departmentController.deleteDepartment);
 
 module.exports = router;
 

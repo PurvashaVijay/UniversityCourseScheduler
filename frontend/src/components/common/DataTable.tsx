@@ -1,5 +1,6 @@
 // src/components/common/DataTable.tsx
 
+
 import React, { useState } from 'react';
 import { 
   Box, 
@@ -25,6 +26,11 @@ import EditIcon from '@mui/icons-material/Edit';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import SearchIcon from '@mui/icons-material/Search';
 import { visuallyHidden } from '@mui/utils';
+
+function getRowId(row: any): string {
+  // Try common ID field names, prioritizing the ones your data uses
+  return row.department_id || row.id || row.professor_id || row.course_id || row.program_id;
+}
 
 interface Column {
   id: string;
@@ -93,10 +99,20 @@ const DataTable: React.FC<DataTableProps> = ({
     setOrder(isAsc ? 'desc' : 'asc');
     setOrderBy(property);
   };
-
+  /*
   const handleSelectAllClick = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.checked) {
       const newSelected = data.map((n) => n.id);
+      setSelected(newSelected);
+      return;
+    }
+    setSelected([]);
+  };
+  */
+
+  const handleSelectAllClick = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.checked) {
+      const newSelected = data.map((n) => getRowId(n));  // <-- Changed from n.id to getRowId(n)
       setSelected(newSelected);
       return;
     }
@@ -257,17 +273,17 @@ const DataTable: React.FC<DataTableProps> = ({
             </TableHead>
             <TableBody>
               {visibleRows.map((row, index) => {
-                const isItemSelected = isSelected(row.id);
+                const isItemSelected = isSelected(getRowId(row));
                 const labelId = `enhanced-table-checkbox-${index}`;
 
                 return (
                   <TableRow
                     hover
-                    onClick={(event) => handleClick(event, row.id)}
+                    onClick={(event) => handleClick(event, getRowId(row))}
                     role={selectable ? 'checkbox' : undefined}
                     aria-checked={isItemSelected}
                     tabIndex={-1}
-                    key={row.id}
+                    key={getRowId(row)}
                     selected={isItemSelected}
                     sx={{ cursor: 'pointer' }}
                   >
@@ -297,7 +313,7 @@ const DataTable: React.FC<DataTableProps> = ({
                             <IconButton
                               onClick={(e) => {
                                 e.stopPropagation();
-                                onEdit(row.id);
+                                onEdit(getRowId(row));
                               }}
                             >
                               <EditIcon />
@@ -309,7 +325,7 @@ const DataTable: React.FC<DataTableProps> = ({
                             <IconButton
                               onClick={(e) => {
                                 e.stopPropagation();
-                                onDelete([row.id]);
+                                onDelete([getRowId(row)]);
                               }}
                             >
                               <DeleteIcon />
