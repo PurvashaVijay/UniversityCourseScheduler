@@ -17,6 +17,7 @@ import {
   SelectChangeEvent,
   FormGroup,
   FormControlLabel,
+  Checkbox,
   Switch,
   Grid
 } from '@mui/material';
@@ -62,19 +63,19 @@ const fetchCourses = async (programId: string) => {
   // This would be an API call to get courses for a specific program
   const coursesMap: { [key: string]: any[] } = {
     'PROG-001': [
-      { id: 'COURSE-001', course_id: 'CS101', program_id: 'PROG-001', name: 'Introduction to Programming', duration_minutes: 55, is_core: true },
-      { id: 'COURSE-002', course_id: 'CS201', program_id: 'PROG-001', name: 'Data Structures', duration_minutes: 55, is_core: true },
-      { id: 'COURSE-003', course_id: 'CS301', program_id: 'PROG-001', name: 'Algorithms',  duration_minutes: 80, is_core: true },
-      { id: 'COURSE-004', course_id: 'CS401', program_id: 'PROG-001', name: 'Web Development',duration_minutes: 80, is_core: false }
+      { id: 'COURSE-001', course_id: 'CS101', program_id: 'PROG-001', name: 'Introduction to Programming', duration_minutes: 55, is_core: true, semesters: ['Fall','Spring'] },
+      { id: 'COURSE-002', course_id: 'CS201', program_id: 'PROG-001', name: 'Data Structures', duration_minutes: 55, is_core: true, semesters: ['Fall'] },
+      { id: 'COURSE-003', course_id: 'CS301', program_id: 'PROG-001', name: 'Algorithms', duration_minutes: 80, is_core: true, semesters: ['Spring'] },
+      { id: 'COURSE-004', course_id: 'CS401', program_id: 'PROG-001', name: 'Web Development', duration_minutes: 80, is_core: false, semesters: ['Spring'] }
     ],
     'PROG-002': [
-      { id: 'COURSE-005', course_id: 'CS501', program_id: 'PROG-002', name: 'Advanced Algorithms', duration_minutes: 80, is_core: true },
-      { id: 'COURSE-006', course_id: 'CS601', program_id: 'PROG-002', name: 'Machine Learning',  duration_minutes: 80, is_core: true },
-      { id: 'COURSE-007', course_id: 'CS701', program_id: 'PROG-002', name: 'Big Data Analytics',  duration_minutes: 180, is_core: false }
+      { id: 'COURSE-005', course_id: 'CS501', program_id: 'PROG-002', name: 'Advanced Algorithms', duration_minutes: 80, is_core: true, semesters: ['Spring'] },
+      { id: 'COURSE-006', course_id: 'CS601', program_id: 'PROG-002', name: 'Machine Learning', duration_minutes: 80, is_core: true, semesters: ['Spring'] },
+      { id: 'COURSE-007', course_id: 'CS701', program_id: 'PROG-002', name: 'Big Data Analytics', duration_minutes: 180, is_core: false, semesters: ['Fall']}
     ],
     'PROG-003': [
-      { id: 'COURSE-008', course_id: 'ECON101', program_id: 'PROG-003', name: 'Principles of Economics',  duration_minutes: 55, is_core: true },
-      { id: 'COURSE-009', course_id: 'ECON201', program_id: 'PROG-003', name: 'Microeconomics',  duration_minutes: 55, is_core: true }
+      { id: 'COURSE-008', course_id: 'ECON101', program_id: 'PROG-003', name: 'Principles of Economics', duration_minutes: 55, is_core: true, semesters: ['Fall'] },
+      { id: 'COURSE-009', course_id: 'ECON201', program_id: 'PROG-003', name: 'Microeconomics', duration_minutes: 55, is_core: true, semesters: ['Fall']}
     ]
   };
   
@@ -98,6 +99,7 @@ const CourseList: React.FC = () => {
   const [loadingCourses, setLoadingCourses] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showCoreOnly, setShowCoreOnly] = useState(false);
+  const [selectedSemesters, setSelectedSemesters] = useState<string[]>(['Fall', 'Spring']);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [coursesToDelete, setCoursesToDelete] = useState<string[]>([]);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
@@ -118,8 +120,14 @@ const CourseList: React.FC = () => {
       label: 'Core Course', 
       minWidth: 120,
       format: (value: boolean) => value ? 'Core' : 'Elective'
-    }
-  ];
+    },
+    {
+      id: 'semesters',  
+      label: 'Semesters',  
+      minWidth: 120,
+      format: (value: string[]) => Array.isArray(value) ? value.join(', ') : value  // Handle both array and string formats
+    },
+  ];  
 
   // Load departments on component mount
   useEffect(() => {
@@ -270,12 +278,63 @@ const CourseList: React.FC = () => {
     navigate(`/admin/courses/${id}`);
   };
 
+  // Filter courses based on Semester checkbox 
+const SemesterFilter: React.FC<{
+  selectedSemesters: string[];
+  onChange: (semesters: string[]) => void;
+}> = ({ selectedSemesters, onChange }) => {
+  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const { value, checked } = event.target;
+    
+    if (checked) {
+      onChange([...selectedSemesters, value]);
+    } else {
+      onChange(selectedSemesters.filter(semester => semester !== value));
+    }
+  };
+
+  return (
+    <Box sx={{ mb: 2 }}>
+      <Typography variant="subtitle2" gutterBottom>
+        Semester
+      </Typography>
+      <Box sx={{ display: 'flex', gap: 2 }}>
+        <FormControlLabel
+          control={
+            <Checkbox 
+              checked={selectedSemesters.includes('Fall')}
+              onChange={handleChange}
+              value="Fall"
+            />
+          }
+          label="Fall"
+        />
+        <FormControlLabel
+          control={
+            <Checkbox 
+              checked={selectedSemesters.includes('Spring')}
+              onChange={handleChange}
+              value="Spring"
+            />
+          }
+          label="Spring"
+        />
+      </Box>
+    </Box>
+  );
+};
+
   // Filter courses based on search term and core filter
   const filteredCourses = courses.filter(course => 
     (course.course_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
     course.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     course.description.toLowerCase().includes(searchTerm.toLowerCase())) &&
-    (!showCoreOnly || course.is_core)
+    (!showCoreOnly || course.is_core)&&
+    (selectedSemesters.length === 0 || 
+      (selectedSemesters.length === 0 || 
+        (Array.isArray(course.semesters)
+          ? course.semesters.some((sem: string) => selectedSemesters.includes(sem))
+          : selectedSemesters.includes(course.semester))))
   );
 
   return (
@@ -343,6 +402,14 @@ const CourseList: React.FC = () => {
             </FormControl>
           </Grid>
         </Grid>
+
+        <Grid item xs={12} md={6}>
+        <SemesterFilter 
+        selectedSemesters={selectedSemesters}
+        onChange={setSelectedSemesters}
+          />
+        </Grid>
+    
 
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <TextField

@@ -9,6 +9,7 @@ import {
   Grid, 
   Snackbar, 
   Alert,
+  Checkbox,
   CircularProgress,
   Breadcrumbs,
   Link as MuiLink,
@@ -43,29 +44,35 @@ const fetchPrograms = async () => {
 const fetchCourse = async (id: string) => {
   // This would be an API call to get a specific course
   const coursesMap: { [key: string]: any } = {
-    'COURSE-001': { 
-      id: 'COURSE-001', 
-      course_id: 'CS101', 
-      program_id: 'PROG-001', 
-      name: 'Introduction to Programming', 
-      duration_minutes: 55, 
-      is_core: true 
+    'COURSE-001': {
+      id: 'COURSE-001',
+      course_id: 'CS101',
+      program_id: 'PROG-001',
+      name: 'Introduction to Programming',
+      description: 'Basic programming concepts',
+      duration_minutes: 55,
+      is_core: true,
+      semesters: ['Fall'] // Add semester
     },
-    'COURSE-002': { 
-      id: 'COURSE-002', 
-      course_id: 'CS201', 
-      program_id: 'PROG-001', 
-      name: 'Data Structures',  
-      duration_minutes: 55, 
-      is_core: true 
+    'COURSE-002': {
+      id: 'COURSE-002',
+      course_id: 'CS201',
+      program_id: 'PROG-001',
+      name: 'Data Structures',
+      description: 'Advanced data structures',
+      duration_minutes: 55,
+      is_core: true,
+      semester: 'Spring' // Add semester
     },
-    'COURSE-005': { 
-      id: 'COURSE-005', 
-      course_id: 'CS501', 
-      program_id: 'PROG-002', 
-      name: 'Advanced Algorithms',  
-      duration_minutes: 80, 
-      is_core: true 
+    'COURSE-005': {
+      id: 'COURSE-005',
+      course_id: 'CS501',
+      program_id: 'PROG-002',
+      name: 'Advanced Algorithms',
+      description: 'Complex algorithms and optimization',
+      duration_minutes: 80,
+      is_core: true,
+      semesters: ['Spring'] // Add semester
     }
   };
   
@@ -95,7 +102,8 @@ const CourseForm: React.FC = () => {
     name: '',
     description: '',
     duration_minutes: 55 as number | '',
-    is_core: false
+    is_core: false,
+    semesters: [] as string[]
   });
   
   const [loading, setLoading] = useState(isEditing);
@@ -177,6 +185,9 @@ const CourseForm: React.FC = () => {
       newErrors.duration_minutes = 'Duration must be greater than 0';
     }
     
+    if (course.semesters.length === 0) {
+      newErrors.semesters = 'At least one semester must be selected';
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -380,25 +391,52 @@ const CourseForm: React.FC = () => {
                 label="Core Course"
               />
             </Grid>
-            <Grid item xs={12} sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
-              <Button
-                type="submit"
-                variant="contained"
-                color="primary"
-                startIcon={<SaveIcon />}
-                disabled={saving}
-                sx={{ bgcolor: '#00539F' }}
-              >
-                {saving ? (
-                  <>
-                    <CircularProgress size={24} sx={{ mr: 1, color: 'white' }} />
-                    Saving...
-                  </>
-                ) : (
-                  'Save Course'
-                )}
-              </Button>
-            </Grid>
+            <Grid item xs={12} md={6}>
+            <Typography variant="subtitle2" gutterBottom>
+              Semester
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={course.semesters.includes('Fall')}
+                    onChange={(e) => {
+                      const { checked } = e.target;
+                      setCourse(prev => ({
+                        ...prev,
+                        semesters: checked 
+                          ? [...prev.semesters, 'Fall'] 
+                          : prev.semesters.filter(sem => sem !== 'Fall')
+                      }));
+                    }}
+                  />
+                }
+                label="Fall"
+              />
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={course.semesters.includes('Spring')}
+                    onChange={(e) => {
+                      const { checked } = e.target;
+                      setCourse(prev => ({
+                        ...prev,
+                        semesters: checked 
+                          ? [...prev.semesters, 'Spring'] 
+                          : prev.semesters.filter(sem => sem !== 'Spring')
+                      }));
+                    }}
+                  />
+                }
+                label="Spring"
+              />
+            </Box>
+            {errors.semesters && (
+            <Typography color="error" variant="caption">
+              {errors.semesters}
+            </Typography>
+          )}
+          </Grid>
           </Grid>
         </Box>
       </Paper>

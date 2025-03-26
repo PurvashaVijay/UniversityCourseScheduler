@@ -26,23 +26,27 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 const fetchCourseDetails = async (id: string) => {
   // This would be an API call to get a specific course
   const coursesMap: { [key: string]: any } = {
-    'COURSE-001': { 
-      id: 'COURSE-001', 
-      course_id: 'CS101', 
-      program_id: 'PROG-001', 
-      name: 'Introduction to Programming', 
-      duration_minutes: 55, 
+    'COURSE-001': {
+      id: 'COURSE-001',
+      course_id: 'CS101',
+      program_id: 'PROG-001',
+      name: 'Introduction to Programming',
+      description: 'Basic programming concepts and an introduction to Python programming language. Topics include variables, data types, control structures, functions, and basic algorithms.',
+      duration_minutes: 55,
       is_core: true,
+      semesters: ['Fall'], // Add semester
       program: { program_id: 'PROG-001', name: 'Bachelor of Science in Computer Science' },
       prerequisites: []
     },
-    'COURSE-002': { 
-      id: 'COURSE-002', 
-      course_id: 'CS201', 
-      program_id: 'PROG-001', 
-      name: 'Data Structures', 
-      duration_minutes: 55, 
+    'COURSE-002': {
+      id: 'COURSE-002',
+      course_id: 'CS201',
+      program_id: 'PROG-001',
+      name: 'Data Structures',
+      description: 'Advanced data structures including arrays, linked lists, stacks, queues, trees, and graphs. Implementation and analysis of fundamental algorithms.',
+      duration_minutes: 55,
       is_core: true,
+      semesters: ['Spring'], // Add semester
       program: { program_id: 'PROG-001', name: 'Bachelor of Science in Computer Science' },
       prerequisites: [
         { course_id: 'CS101', name: 'Introduction to Programming' }
@@ -228,6 +232,16 @@ const CourseDetails: React.FC = () => {
                   {course.duration_minutes} minutes
                 </Typography>
               </Grid> 
+              <Grid item xs={12} md={4}>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Semester
+                </Typography>
+                <Typography variant="h6">
+                  {Array.isArray(course.semesters) 
+                    ? course.semesters.join(', ') 
+                    : course.semester || 'Not specified'}
+                </Typography>
+              </Grid>
             </Grid>
           </Paper>
     
