@@ -30,8 +30,8 @@ async function syncDatabase() {
     
     // Add initial time slots and default admin
     // Comment these out for now since they might rely on model associations
-    await createDefaultTimeSlots();
-    await createDefaultAdmin();
+    //await createDefaultTimeSlots();
+    //await createDefaultAdmin();
     
     console.log('Database initialization complete.');
   } catch (error) {
