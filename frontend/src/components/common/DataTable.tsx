@@ -26,10 +26,16 @@ import EditIcon from '@mui/icons-material/Edit';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import SearchIcon from '@mui/icons-material/Search';
 import { visuallyHidden } from '@mui/utils';
-
+/*
 function getRowId(row: any): string {
   // Try common ID field names, prioritizing the ones your data uses
   return row.department_id || row.id || row.professor_id || row.course_id || row.program_id;
+}
+*/
+function getRowId(row: any): string {
+  // Try common ID field names, prioritizing the ones your data uses
+  // Be page-specific about the primary ID to use
+  return row.program_id || row.course_id || row.professor_id || row.id || row.department_id;
 }
 
 interface Column {

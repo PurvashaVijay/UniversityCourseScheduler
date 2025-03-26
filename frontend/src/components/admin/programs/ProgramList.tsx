@@ -19,55 +19,10 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import SearchIcon from '@mui/icons-material/Search';
 import { useNavigate } from 'react-router-dom';
-//import DataTable from '../../common/DataTable';
-//import ConfirmDialog from '../../common/ConfirmDialog';
 import DataTable from '../../../components/common/DataTable';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
-
-// Mock data functions (replace with actual API calls later)
-const fetchDepartments = async () => {
-  // This would be an API call to get departments
-  return [
-    { id: 'DEPT-001', department_id: 'DEPT-001', name: 'Computer Science', description: 'CS Department' },
-    { id: 'DEPT-002', department_id: 'DEPT-002', name: 'Economics', description: 'Economics Department' },
-    { id: 'DEPT-003', department_id: 'DEPT-003', name: 'Mathematics', description: 'Mathematics Department' },
-    { id: 'DEPT-004', department_id: 'DEPT-004', name: 'Physics', description: 'Physics Department' },
-    { id: 'DEPT-005', department_id: 'DEPT-005', name: 'Business Administration', description: 'Business Administration Department' },
-  ];
-};
-
-const fetchPrograms = async (departmentId: string) => {
-  // This would be an API call to get programs for a specific department
-  const programsMap: { [key: string]: any[] } = {
-    'DEPT-001': [
-      { id: 'PROG-001', program_id: 'PROG-001', name: 'Bachelor of Science in Computer Science', description: 'BS in CS program' },
-      { id: 'PROG-002', program_id: 'PROG-002', name: 'Master of Science in Computer Science', description: 'MS in CS program' }
-    ],
-    'DEPT-002': [
-      { id: 'PROG-003', program_id: 'PROG-003', name: 'Bachelor of Economics', description: 'Economics undergraduate program' },
-      { id: 'PROG-004', program_id: 'PROG-004', name: 'Master of Economics', description: 'Economics graduate program' }
-    ],
-    'DEPT-003': [
-      { id: 'PROG-005', program_id: 'PROG-005', name: 'Bachelor of Mathematics', description: 'Mathematics undergraduate program' },
-      { id: 'PROG-006', program_id: 'PROG-006', name: 'Master of Mathematics', description: 'Mathematics graduate program' }
-    ],
-    'DEPT-004': [
-      { id: 'PROG-007', program_id: 'PROG-007', name: 'Bachelor of Physics', description: 'Physics undergraduate program' },
-      { id: 'PROG-008', program_id: 'PROG-008', name: 'Master of Physics', description: 'Physics graduate program' }
-    ],
-    'DEPT-005': [
-      { id: 'PROG-009', program_id: 'PROG-009', name: 'Bachelor of Business Administration', description: 'BBA program' },
-      { id: 'PROG-010', program_id: 'PROG-010', name: 'Master of Business Administration', description: 'MBA program' }
-    ]
-  };
-  
-  return programsMap[departmentId] || [];
-};
-
-const deletePrograms = async (ids: string[]) => {
-  console.log('Deleting programs:', ids);
-  return { success: true, message: 'Programs deleted successfully' };
-};
+import programService from '../../../services/programService';
+import departmentService from '../../../services/departmentService';
 
 const ProgramList: React.FC = () => {
   const navigate = useNavigate();
@@ -89,7 +44,7 @@ const ProgramList: React.FC = () => {
   useEffect(() => {
     const loadDepartments = async () => {
       try {
-        const data = await fetchDepartments();
+        const data = await departmentService.getAllDepartments();
         setDepartments(data);
       } catch (error) {
         console.error('Error loading departments:', error);
@@ -115,7 +70,7 @@ const ProgramList: React.FC = () => {
   const loadPrograms = async (departmentId: string) => {
     try {
       setLoading(true);
-      const data = await fetchPrograms(departmentId);
+      const data = await programService.getProgramsByDepartment(departmentId);
       setPrograms(data);
     } catch (error) {
       console.error('Error loading programs:', error);
@@ -146,42 +101,44 @@ const ProgramList: React.FC = () => {
   };
 
   const handleEditProgram = (id: string) => {
+    console.log("Edit clicked with ID:", id); // Add this debug line
     navigate(`/admin/programs/${id}/edit`);
   };
 
   const handleDeleteClick = (ids: string | string[]) => {
     const idsArray = Array.isArray(ids) ? ids : [ids];
+    console.log("Delete clicked with IDs:", idsArray); // Add this debug line
     setProgramsToDelete(idsArray);
     setDeleteDialogOpen(true);
   };
 
   const handleDeleteConfirm = async () => {
     try {
-      const result = await deletePrograms(programsToDelete);
-      
-      if (result.success) {
-        // Remove deleted programs from state
-        setPrograms(programs.filter(
-          prog => !programsToDelete.includes(prog.id)
-        ));
-        
-        setSnackbar({
-          open: true,
-          message: result.message,
-          severity: 'success'
-        });
+      if (programsToDelete.length > 1) {
+        // Use batch delete if multiple programs
+        await programService.deletePrograms(programsToDelete);
       } else {
-        setSnackbar({
-          open: true,
-          message: result.message || 'Failed to delete programs',
-          severity: 'error'
-        });
+        // Delete one by one
+        for (const id of programsToDelete) {
+          await programService.deleteProgram(id);
+        }
       }
+      
+      // Remove deleted programs from state
+      setPrograms(prev => prev.filter(
+        prog => !programsToDelete.includes(prog.program_id)
+      ));
+      
+      setSnackbar({
+        open: true,
+        message: 'Programs deleted successfully',
+        severity: 'success'
+      });
     } catch (error) {
       console.error('Error deleting programs:', error);
       setSnackbar({
         open: true,
-        message: 'Failed to delete programs',
+        message: error instanceof Error ? error.message : 'Failed to delete programs',
         severity: 'error'
       });
     } finally {
@@ -191,14 +148,15 @@ const ProgramList: React.FC = () => {
   };
 
   const handleRowClick = (id: string) => {
+    console.log("Row clicked with ID:", id); // Add this debug line
     navigate(`/admin/programs/${id}`);
   };
 
   // Filter programs based on search term
   const filteredPrograms = programs.filter(program => 
-    program.program_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    program.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    program.description.toLowerCase().includes(searchTerm.toLowerCase())
+    program.program_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    program.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (program.description?.toLowerCase().includes(searchTerm.toLowerCase()) || '')
   );
 
   return (

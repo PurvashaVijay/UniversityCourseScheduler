@@ -20,53 +20,16 @@ import {
 } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-//import { Link, useNavigate, useParams, useLocation } from 'react-router-dom';
-//import { TextInput } from '../../common/FormComponents';
 import { Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { TextInput } from '../../../components/common/FormComponents';
-import { v4 as uuidv4 } from 'uuid';
-
-// Mock functions for API calls
-const fetchDepartments = async () => {
-  // This would be an API call to get departments
-  return [
-    { id: 'DEPT-001', department_id: 'DEPT-001', name: 'Computer Science', description: 'CS Department' },
-    { id: 'DEPT-002', department_id: 'DEPT-002', name: 'Economics', description: 'Economics Department' },
-    { id: 'DEPT-003', department_id: 'DEPT-003', name: 'Mathematics', description: 'Mathematics Department' },
-    { id: 'DEPT-004', department_id: 'DEPT-004', name: 'Physics', description: 'Physics Department' },
-    { id: 'DEPT-005', department_id: 'DEPT-005', name: 'Business Administration', description: 'Business Administration Department' },
-  ];
-};
-
-const fetchProgram = async (id: string) => {
-  // This would be an API call to get a specific program
-  // Mock data for demonstration
-  const programsMap: { [key: string]: any } = {
-    'PROG-001': { program_id: 'PROG-001', department_id: 'DEPT-001', name: 'Bachelor of Science in Computer Science', description: 'BS in CS program' },
-    'PROG-002': { program_id: 'PROG-002', department_id: 'DEPT-001', name: 'Master of Science in Computer Science', description: 'MS in CS program' },
-    'PROG-003': { program_id: 'PROG-003', department_id: 'DEPT-002', name: 'Bachelor of Economics', description: 'Economics undergraduate program' },
-    'PROG-004': { program_id: 'PROG-004', department_id: 'DEPT-002', name: 'Master of Economics', description: 'Economics graduate program' },
-    'PROG-005': { program_id: 'PROG-005', department_id: 'DEPT-003', name: 'Bachelor of Mathematics', description: 'Mathematics undergraduate program' },
-    'PROG-006': { program_id: 'PROG-006', department_id: 'DEPT-003', name: 'Master of Mathematics', description: 'Mathematics graduate program' },
-    'PROG-007': { program_id: 'PROG-007', department_id: 'DEPT-004', name: 'Bachelor of Physics', description: 'Physics undergraduate program' },
-    'PROG-008': { program_id: 'PROG-008', department_id: 'DEPT-004', name: 'Master of Physics', description: 'Physics graduate program' },
-    'PROG-009': { program_id: 'PROG-009', department_id: 'DEPT-005', name: 'Bachelor of Business Administration', description: 'BBA program' },
-    'PROG-010': { program_id: 'PROG-010', department_id: 'DEPT-005', name: 'Master of Business Administration', description: 'MBA program' }
-  };
-  
-  return programsMap[id] || null;
-};
-
-const saveProgram = async (program: any) => {
-  console.log('Saving program:', program);
-  // This would be an API call to save the program
-  return { success: true, program };
-};
+//import { v4 as uuidv4 } from 'uuid';
+import programService from '../../../services/programService';
+import departmentService from '../../../services/departmentService';
 
 const ProgramForm: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { id } = useParams<{ id: string }>();
+  const { id } = useParams<{ id?: string }>();
   const isEditing = Boolean(id);
   
   // Get departmentId from query param if present (for new programs)
@@ -89,7 +52,7 @@ const ProgramForm: React.FC = () => {
   useEffect(() => {
     const loadDepartments = async () => {
       try {
-        const data = await fetchDepartments();
+        const data = await departmentService.getAllDepartments();
         setDepartments(data);
       } catch (error) {
         console.error('Error loading departments:', error);
@@ -102,13 +65,19 @@ const ProgramForm: React.FC = () => {
     };
 
     loadDepartments();
-    
-    if (isEditing) {
+      
+    if (isEditing && id) {
       const loadProgram = async () => {
         try {
-          const data = await fetchProgram(id!);
+          setLoading(true);
+          const data = await programService.getProgramById(id);
           if (data) {
-            setProgram(data);
+            setProgram({
+              program_id: data.program_id,
+              department_id: data.department_id,
+              name: data.name,
+              description: data.description || ''
+            });
           } else {
             setSnackbar({
               open: true,
@@ -128,13 +97,14 @@ const ProgramForm: React.FC = () => {
           setLoading(false);
         }
       };
-
+    
       loadProgram();
     } else {
-      // For new programs, generate a unique ID
+      // For new programs, set an empty program_id instead of generating one
       setProgram(prevProgram => ({
         ...prevProgram,
-        program_id: `PROG-${uuidv4().substring(0, 8)}`
+        program_id: '', // Changed from auto-generated to empty
+        department_id: initialDepartmentId
       }));
     }
   }, [id, isEditing, navigate, initialDepartmentId]);
@@ -142,10 +112,16 @@ const ProgramForm: React.FC = () => {
   const validateForm = () => {
     const newErrors: {[key: string]: string} = {};
     
+    if (!program.program_id.trim()) {
+      newErrors.program_id = 'Program ID is required';
+    } else if (!/^[A-Za-z0-9\-_]+$/.test(program.program_id)) {
+      newErrors.program_id = 'Program ID can only contain letters, numbers, hyphens, and underscores';
+    }
+    
     if (!program.name.trim()) {
       newErrors.name = 'Program name is required';
     }
-    
+
     if (!program.department_id) {
       newErrors.department_id = 'Department is required';
     }
@@ -154,34 +130,47 @@ const ProgramForm: React.FC = () => {
     return Object.keys(newErrors).length === 0;
   };
 
+// In ProgramForm.tsx, update the handleSubmit function:
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+  
     if (!validateForm()) {
       return;
     }
-    
+  
     try {
       setSaving(true);
-      const result = await saveProgram(program);
-      
-      if (result.success) {
-        setSnackbar({
-          open: true,
-          message: `Program ${isEditing ? 'updated' : 'created'} successfully`,
-          severity: 'success'
+      console.log('Submitting program data:', program);  // Add this line to debug
+    
+      if (isEditing && id) {
+        console.log(`Updating program with ID: ${id}`, program);
+        // Make sure you're passing the correct ID format
+        await programService.updateProgram(id, {
+          name: program.name,
+          description: program.description,
+          department_id: program.department_id // Make sure to include this
         });
-        
-        // Navigate back after a brief delay
-        setTimeout(() => {
-          navigate('/admin/programs');
-        }, 1500);
+      } else {
+        console.log('Creating new program:', program);
+        await programService.createProgram(program);
       }
+    
+      setSnackbar({
+        open: true,
+        message: `Program ${isEditing ? 'updated' : 'created'} successfully`,
+        severity: 'success'
+      });
+    
+      // Navigate back after a brief delay
+      setTimeout(() => {
+        navigate('/admin/programs');
+      }, 1500);
     } catch (error) {
       console.error('Error saving program:', error);
       setSnackbar({
         open: true,
-        message: `Failed to ${isEditing ? 'update' : 'create'} program`,
+        message: error instanceof Error ? error.message : `Failed to ${isEditing ? 'update' : 'create'} program`,
         severity: 'error'
       });
     } finally {
