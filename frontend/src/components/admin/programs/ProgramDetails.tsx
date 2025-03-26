@@ -23,55 +23,17 @@ import {
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
-//import { Link, useNavigate, useParams } from 'react-router-dom';
-//import ConfirmDialog from '../../common/ConfirmDialog';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import programService from '../../../services/programService';
+// Add this right after the import in ProgramDetails.tsx
+console.log('programService imported:', programService);
 
-// Mock API functions
-const fetchProgramDetails = async (id: string) => {
-  // Mock data for demonstration
-  const programsMap: { [key: string]: any } = {
-    'PROG-001': { 
-      program_id: 'PROG-001', 
-      department_id: 'DEPT-001',
-      name: 'Bachelor of Science in Computer Science', 
-      description: 'BS in CS program',
-      department: { department_id: 'DEPT-001', name: 'Computer Science' },
-      courses: [
-        { course_id: 'CS101', course_name: 'Introduction to Programming', is_core: true },
-        { course_id: 'CS201', course_name: 'Data Structures', is_core: true },
-        { course_id: 'CS301', course_name: 'Algorithms', is_core: true },
-        { course_id: 'CS401', course_name: 'Database Systems', is_core: false }
-      ]
-    },
-    'PROG-002': { 
-      program_id: 'PROG-002', 
-      department_id: 'DEPT-001',
-      name: 'Master of Science in Computer Science', 
-      description: 'MS in CS program',
-      department: { department_id: 'DEPT-001', name: 'Computer Science' },
-      courses: [
-        { course_id: 'CS501', course_name: 'Advanced Algorithms', is_core: true },
-        { course_id: 'CS601', course_name: 'Machine Learning', is_core: true },
-        { course_id: 'CS701', course_name: 'Advanced Database Systems', is_core: false }
-      ]
-    }
-  };
-  
-  return programsMap[id] || null;
-};
-
-const deleteProgram = async (id: string) => {
-  console.log('Deleting program:', id);
-  // This would be an API call to delete the program
-  return { success: true };
-};
 
 const ProgramDetails: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  
+  console.log("Program detail page loaded with ID:", id); // Add this debug line
   const [program, setProgram] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [tabValue, setTabValue] = useState(0);
@@ -79,16 +41,23 @@ const ProgramDetails: React.FC = () => {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
   useEffect(() => {
+    // And modify the loadProgram function with debugging:
     const loadProgram = async () => {
       try {
-        const data = await fetchProgramDetails(id!);
+        setLoading(true);
+        console.log('Attempting to load program with ID:', id);
+        console.log('getProgramById function:', programService.getProgramById);
+    
+        const data = await programService.getProgramById(id!);
+        console.log('Program data loaded:', data);
+    
         if (data) {
           setProgram(data);
         } else {
           setSnackbar({
-            open: true,
-            message: 'Program not found',
-            severity: 'error'
+          open: true,
+          message: 'Program not found',
+          severity: 'error'
           });
           navigate('/admin/programs');
         }
@@ -96,15 +65,17 @@ const ProgramDetails: React.FC = () => {
         console.error('Error loading program:', error);
         setSnackbar({
           open: true,
-          message: 'Failed to load program details',
+          message: error instanceof Error ? error.message : 'Failed to load program details',
           severity: 'error'
         });
       } finally {
         setLoading(false);
       }
     };
-
-    loadProgram();
+  
+    if (id) {
+      loadProgram();
+    }
   }, [id, navigate]);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
@@ -121,31 +92,31 @@ const ProgramDetails: React.FC = () => {
 
   const handleDeleteConfirm = async () => {
     try {
-      const result = await deleteProgram(id!);
+      console.log(`Trying to delete program with ID: ${id}`);
+      await programService.deleteProgram(id!);
       
-      if (result.success) {
-        setSnackbar({
-          open: true,
-          message: 'Program deleted successfully',
-          severity: 'success'
-        });
-        
-        // Navigate back after a brief delay
-        setTimeout(() => {
-          navigate('/admin/programs');
-        }, 1500);
-      }
+      setSnackbar({
+        open: true,
+        message: 'Program deleted successfully',
+        severity: 'success'
+      });
+      
+      // Navigate back after a brief delay
+      setTimeout(() => {
+        navigate('/admin/programs');
+      }, 1500);
     } catch (error) {
       console.error('Error deleting program:', error);
       setSnackbar({
         open: true,
-        message: 'Failed to delete program',
+        message: error instanceof Error ? error.message : 'Failed to delete program',
         severity: 'error'
       });
     } finally {
       setDeleteDialogOpen(false);
     }
   };
+
 
   if (loading) {
     return (
@@ -219,7 +190,7 @@ const ProgramDetails: React.FC = () => {
               Department
             </Typography>
             <Typography variant="h6">
-              {program.department.name}
+              {program.department?.name || program.department_id}
             </Typography>
           </Grid>
           <Grid item xs={12}>
@@ -275,7 +246,7 @@ const ProgramDetails: React.FC = () => {
                       <ListItemText
                         primary={
                           <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            {course.course_name}
+                            {course.course_name || course.name}
                             {course.is_core && (
                               <Chip 
                                 label="Core" 

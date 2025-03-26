@@ -1,6 +1,6 @@
 // src/services/programService.ts
 
-import { v4 as uuidv4 } from 'uuid';
+//import { v4 as uuidv4 } from 'uuid';
 
 // Define the base API URL
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
@@ -95,9 +95,9 @@ export const createProgram = async (program: Partial<Program>): Promise<Program>
     const token = localStorage.getItem('token');
     
     // If no ID is provided, generate one
-    if (!program.program_id) {
-      program.program_id = `PROG-${uuidv4().substring(0, 8)}`;
-    }
+    //if (!program.program_id) {
+    //  program.program_id = `PROG-${uuidv4().substring(0, 8)}`;
+    //}
     
     const response = await fetch(`${API_URL}/programs`, {
       method: 'POST',
@@ -125,6 +125,8 @@ export const createProgram = async (program: Partial<Program>): Promise<Program>
 export const updateProgram = async (id: string, program: Partial<Program>): Promise<Program> => {
   try {
     const token = localStorage.getItem('token');
+    console.log(`Making PUT request to: ${API_URL}/programs/${id}`, program);
+    
     const response = await fetch(`${API_URL}/programs/${id}`, {
       method: 'PUT',
       headers: {
@@ -151,6 +153,8 @@ export const updateProgram = async (id: string, program: Partial<Program>): Prom
 export const deleteProgram = async (id: string): Promise<{ success: boolean; message: string }> => {
   try {
     const token = localStorage.getItem('token');
+    console.log(`Making DELETE request to: ${API_URL}/programs/${id}`);
+    
     const response = await fetch(`${API_URL}/programs/${id}`, {
       method: 'DELETE',
       headers: {
@@ -164,8 +168,28 @@ export const deleteProgram = async (id: string): Promise<{ success: boolean; mes
       throw new Error(errorData.message || 'Failed to delete program');
     }
 
-    const data = await response.json();
-    return { success: true, message: data.message || 'Program deleted successfully' };
+    // Handle 204 No Content or empty responses
+    if (response.status === 204 || response.headers.get('content-length') === '0') {
+      return { 
+        success: true, 
+        message: 'Program deleted successfully' 
+      };
+    }
+
+    // Only try to parse JSON if there's a response body
+    try {
+      const data = await response.json();
+      return { 
+        success: true, 
+        message: data.message || 'Program deleted successfully' 
+      };
+    } catch (parseError) {
+      // If JSON parsing fails, still return success since the request succeeded
+      return { 
+        success: true, 
+        message: 'Program deleted successfully' 
+      };
+    }
   } catch (error) {
     console.error(`Error in deleteProgram for ID ${id}:`, error);
     throw error;
