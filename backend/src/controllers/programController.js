@@ -45,14 +45,23 @@ exports.getProgramById = async (req, res) => {
 // Create new program
 exports.createProgram = async (req, res) => {
   try {
-    const { department_id, name, description, course_ids } = req.body;
+    console.log('Create program request body:', req.body);
+    const { program_id, department_id, name, description, course_ids } = req.body;
     
-    // Generate a unique program ID
-    const programId = 'PROG-' + uuidv4().substring(0, 8);
+    // Check if program ID is provided
+    if (!program_id) {
+      return res.status(400).json({ message: 'Program ID is required' });
+    }
+    
+    // Check if program ID already exists
+    const existingProgram = await Program.findByPk(program_id);
+    if (existingProgram) {
+      return res.status(409).json({ message: 'Program with this ID already exists' });
+    }
     
     // Create the program
     const newProgram = await Program.create({
-      program_id: programId,
+      program_id, // Use the provided ID
       department_id,
       name,
       description
@@ -69,7 +78,7 @@ exports.createProgram = async (req, res) => {
           courseAssociations.push({
             course_program_id: 'CP-' + uuidv4().substring(0, 8),
             course_id: courseId,
-            program_id: programId,
+            program_id: program_id,
             is_required: course.is_core
           });
         }
@@ -81,7 +90,7 @@ exports.createProgram = async (req, res) => {
     }
     
     // Return the created program with its relationships
-    const createdProgram = await Program.findByPk(programId, {
+    const createdProgram = await Program.findByPk(program_id, {
       include: [
         { model: Department, attributes: ['name'] },
         { 
@@ -106,11 +115,13 @@ exports.createProgram = async (req, res) => {
 exports.updateProgram = async (req, res) => {
   try {
     const programId = req.params.id;
+    console.log(`Attempting to update program with ID: ${programId}`); // Add this line
     const { department_id, name, description, course_ids } = req.body;
     
     // Check if program exists
     const program = await Program.findByPk(programId);
     if (!program) {
+      console.log(`Program with ID ${programId} not found`); // Add this line
       return res.status(404).json({ message: 'Program not found' });
     }
     
@@ -171,10 +182,12 @@ exports.updateProgram = async (req, res) => {
 exports.deleteProgram = async (req, res) => {
   try {
     const programId = req.params.id;
+    console.log(`Attempting to delete program with ID: ${programId}`);
     
     // Check if program exists
     const program = await Program.findByPk(programId);
     if (!program) {
+      console.log(`Program with ID ${programId} not found`);
       return res.status(404).json({ message: 'Program not found' });
     }
     
@@ -184,7 +197,8 @@ exports.deleteProgram = async (req, res) => {
     // Delete the program
     await Program.destroy({ where: { program_id: programId } });
     
-    return res.status(204).send();
+    // Change from res.status(204).send() to:
+    return res.status(200).json({ message: 'Program deleted successfully' });
   } catch (error) {
     console.error('Error deleting program:', error);
     return res.status(500).json({ message: 'Failed to delete program' });
