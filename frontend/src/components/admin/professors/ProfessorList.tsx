@@ -24,19 +24,26 @@ import {
   Typography,
   IconButton,
   AlertTitle,
-  Alert
+  Alert,
+  Chip,
+  Checkbox,
+  FormControlLabel
 } from '@mui/material';
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as VisibilityIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import professorService, { Professor } from '../../../services/professorService';
 import departmentService, { Department } from '../../../services/departmentService';
+import courseService, { Course } from '../../../services/courseService';
 import ProfessorForm from "./ProfessorForm";
 
 const ProfessorList: React.FC = () => {
   const [professors, setProfessors] = useState<Professor[]>([]);
   const [filteredProfessors, setFilteredProfessors] = useState<Professor[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
   const [selectedDepartment, setSelectedDepartment] = useState<string>('');
+  const [selectedCourse, setSelectedCourse] = useState<string>('');
+  const [selectedSemesters, setSelectedSemesters] = useState<string[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
@@ -47,7 +54,7 @@ const ProfessorList: React.FC = () => {
   
   const navigate = useNavigate();
 
-  // Fetch professors and departments
+  // Fetch professors, departments, and courses
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -56,6 +63,7 @@ const ProfessorList: React.FC = () => {
         
         let professorsLoaded = false;
         let departmentsLoaded = false;
+        let coursesLoaded = false;
         
         try {
           console.log('Fetching professors...');
@@ -77,14 +85,26 @@ const ProfessorList: React.FC = () => {
           departmentsLoaded = true;
         } catch (err) {
           console.error('Error fetching departments:', err);
-          // Don't reference error state here to avoid dependency issues
           if (!professorsLoaded) {
             setError('Failed to fetch departments. Please ensure your backend server is running.');
           }
         }
         
+        try {
+          console.log('Fetching courses...');
+          const coursesData = await courseService.getAllCourses();
+          console.log('Courses data received:', coursesData);
+          setCourses(coursesData);
+          coursesLoaded = true;
+        } catch (err) {
+          console.error('Error fetching courses:', err);
+          if (!professorsLoaded && !departmentsLoaded) {
+            setError('Failed to fetch courses. Please ensure your backend server is running.');
+          }
+        }
+        
         // If nothing loaded, show a comprehensive error
-        if (!professorsLoaded && !departmentsLoaded) {
+        if (!professorsLoaded && !departmentsLoaded && !coursesLoaded) {
           setError('Failed to load data. Please check your backend server connection and try again.');
         }
       } catch (err) {
@@ -94,11 +114,10 @@ const ProfessorList: React.FC = () => {
         setLoading(false);
       }
     };
-
     fetchData();
   }, []); // Empty dependency array - only runs once on mount
 
-  // Filter professors when department or search term changes
+  // Filter professors when department, course, semester, or search term changes
   useEffect(() => {
     let filtered = [...professors];
     
@@ -109,11 +128,30 @@ const ProfessorList: React.FC = () => {
       );
     }
     
+    // Apply course filter
+    if (selectedCourse) {
+      filtered = filtered.filter(
+        professor => professor.course_ids && professor.course_ids.includes(selectedCourse)
+      );
+    }
+    
+    // Apply semester filter
+    if (selectedSemesters.length > 0) {
+      filtered = filtered.filter(professor => {
+        if (!professor.semesters || professor.semesters.length === 0) {
+          return false;
+        }
+        return selectedSemesters.some(semester => 
+          professor.semesters?.includes(semester)
+        );
+      });
+    }
+    
     // Apply search filter (case-insensitive)
     if (searchTerm) {
       const search = searchTerm.toLowerCase();
       filtered = filtered.filter(
-        professor => 
+        professor =>
           professor.first_name.toLowerCase().includes(search) ||
           professor.last_name.toLowerCase().includes(search) ||
           professor.email.toLowerCase().includes(search) ||
@@ -123,7 +161,7 @@ const ProfessorList: React.FC = () => {
     
     setFilteredProfessors(filtered);
     setPage(0); // Reset to first page when filters change
-  }, [professors, selectedDepartment, searchTerm]);
+  }, [professors, selectedDepartment, selectedCourse, selectedSemesters, searchTerm]);
 
   const handleChangePage = (event: unknown, newPage: number) => {
     setPage(newPage);
@@ -136,6 +174,27 @@ const ProfessorList: React.FC = () => {
 
   const handleDepartmentChange = (event: any) => {
     setSelectedDepartment(event.target.value);
+    // Reset course filter when department changes
+    setSelectedCourse('');
+  };
+  
+  const handleCourseChange = (event: any) => {
+    setSelectedCourse(event.target.value);
+  };
+  
+  const handleSemesterChange = (semester: string) => {
+    const currentSemesters = [...selectedSemesters];
+    const index = currentSemesters.indexOf(semester);
+    
+    if (index > -1) {
+      // Remove semester if already selected
+      currentSemesters.splice(index, 1);
+    } else {
+      // Add semester if not selected
+      currentSemesters.push(semester);
+    }
+    
+    setSelectedSemesters(currentSemesters);
   };
 
   const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -176,7 +235,7 @@ const ProfessorList: React.FC = () => {
       if (professor.professor_id && editProfessor) {
         // Update existing professor
         savedProfessor = await professorService.updateProfessor(professor.professor_id, professor);
-        setProfessors(professors.map(p => 
+        setProfessors(professors.map(p =>
           p.professor_id === savedProfessor.professor_id ? savedProfessor : p
         ));
       } else {
@@ -200,6 +259,35 @@ const ProfessorList: React.FC = () => {
   const getDepartmentName = (departmentId: string) => {
     const department = departments.find(dept => dept.department_id === departmentId);
     return department ? department.name : 'Unknown Department';
+  };
+  
+  // Get course names for a professor
+  const getCoursesForProfessor = (professor: Professor) => {
+    if (!professor.course_ids || professor.course_ids.length === 0) {
+      return 'No courses assigned';
+    }
+    
+    const professorCourses = courses.filter(course => 
+      professor.course_ids?.includes(course.course_id)
+    );
+    
+    if (professorCourses.length === 0) {
+      return 'No courses assigned';
+    }
+    
+    if (professorCourses.length <= 2) {
+      return professorCourses.map(c => c.course_name).join(', ');
+    }
+    
+    return `${professorCourses[0].course_name}, ${professorCourses[1].course_name}, +${professorCourses.length - 2} more`;
+  };
+
+  // Get filtered courses based on selected department
+  const getFilteredCourses = () => {
+    if (!selectedDepartment) {
+      return courses;
+    }
+    return courses.filter(course => course.department_id === selectedDepartment);
   };
 
   if (loading) {
@@ -230,17 +318,15 @@ const ProfessorList: React.FC = () => {
             </Button>
           </Grid>
         </Grid>
-
         {error && (
           <Alert severity="error" sx={{ mb: 3 }}>
             <AlertTitle>Error</AlertTitle>
             {error}
           </Alert>
         )}
-
         <Card sx={{ mb: 4 }}>
           <CardContent>
-            <Grid container spacing={2} alignItems="center">
+            <Grid container spacing={2}>
               <Grid item xs={12} md={4}>
                 <TextField
                   fullWidth
@@ -271,7 +357,53 @@ const ProfessorList: React.FC = () => {
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={12} md={4} sx={{ textAlign: 'right' }}>
+              <Grid item xs={12} md={4}>
+                <FormControl fullWidth variant="outlined">
+                  <InputLabel id="course-select-label">Filter by Course</InputLabel>
+                  <Select
+                    labelId="course-select-label"
+                    value={selectedCourse}
+                    onChange={handleCourseChange}
+                    label="Filter by Course"
+                    disabled={!selectedDepartment}
+                  >
+                    <MenuItem value="">
+                      <em>All Courses</em>
+                    </MenuItem>
+                    {getFilteredCourses().map((course) => (
+                      <MenuItem key={course.course_id} value={course.course_id}>
+                        {course.course_name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Filter by Semester
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 2 }}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={selectedSemesters.includes('Fall')}
+                        onChange={() => handleSemesterChange('Fall')}
+                      />
+                    }
+                    label="Fall"
+                  />
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={selectedSemesters.includes('Spring')}
+                        onChange={() => handleSemesterChange('Spring')}
+                      />
+                    }
+                    label="Spring"
+                  />
+                </Box>
+              </Grid>
+              <Grid item xs={12} sx={{ textAlign: 'right' }}>
                 <Typography variant="body2" color="textSecondary">
                   {filteredProfessors.length} professors found
                 </Typography>
@@ -279,7 +411,6 @@ const ProfessorList: React.FC = () => {
             </Grid>
           </CardContent>
         </Card>
-
         <Paper sx={{ width: '100%', overflow: 'hidden' }}>
           <TableContainer sx={{ maxHeight: 440 }}>
             <Table stickyHeader aria-label="professors table">
@@ -289,6 +420,8 @@ const ProfessorList: React.FC = () => {
                   <TableCell>Name</TableCell>
                   <TableCell>Email</TableCell>
                   <TableCell>Department</TableCell>
+                  <TableCell>Courses</TableCell>
+                  <TableCell>Semesters</TableCell>
                   <TableCell align="right">Actions</TableCell>
                 </TableRow>
               </TableHead>
@@ -302,23 +435,40 @@ const ProfessorList: React.FC = () => {
                         <TableCell>{`${professor.first_name} ${professor.last_name}`}</TableCell>
                         <TableCell>{professor.email}</TableCell>
                         <TableCell>{getDepartmentName(professor.department_id)}</TableCell>
+                        <TableCell>{getCoursesForProfessor(professor)}</TableCell>
+                        <TableCell>
+                          {professor.semesters && professor.semesters.length > 0 ? (
+                            <Box sx={{ display: 'flex', gap: 0.5 }}>
+                              {professor.semesters.map(semester => (
+                                <Chip 
+                                  key={semester} 
+                                  label={semester} 
+                                  size="small"
+                                  color={semester === 'Fall' ? 'warning' : 'success'}
+                                />
+                              ))}
+                            </Box>
+                          ) : (
+                            'None'
+                          )}
+                        </TableCell>
                         <TableCell align="right">
-                          <IconButton 
-                            color="primary" 
+                          <IconButton
+                            color="primary"
                             onClick={() => handleViewDetails(professor.professor_id)}
                             size="small"
                           >
                             <VisibilityIcon />
                           </IconButton>
-                          <IconButton 
-                            color="secondary" 
+                          <IconButton
+                            color="secondary"
                             onClick={() => handleEditProfessor(professor)}
                             size="small"
                           >
                             <EditIcon />
                           </IconButton>
-                          <IconButton 
-                            color="error" 
+                          <IconButton
+                            color="error"
                             onClick={() => handleDeleteProfessor(professor.professor_id)}
                             size="small"
                           >
@@ -329,7 +479,7 @@ const ProfessorList: React.FC = () => {
                     ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={5} align="center">
+                    <TableCell colSpan={7} align="center">
                       {error ? 'Error loading data' : 'No professors found'}
                     </TableCell>
                   </TableRow>
@@ -348,13 +498,13 @@ const ProfessorList: React.FC = () => {
           />
         </Paper>
       </Box>
-
       {/* Professor Form Dialog */}
       {openForm && (
         <ProfessorForm
           open={openForm}
           professor={editProfessor}
           departments={departments}
+          courses={courses}
           onClose={handleCloseForm}
           onSave={handleSaveProfessor}
         />

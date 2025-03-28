@@ -22,13 +22,14 @@ import {
   TableCell,
   TableContainer,
   TableHead,
-  TableRow
+  TableRow,
+  Chip
 } from '@mui/material';
 import professorService, { Professor, ProfessorAvailability } from '../../../services/professorService';
 import departmentService, { Department } from '../../../services/departmentService';
 import courseService, { Course } from '../../../services/courseService';
 import ProfessorAvailabilityTab from './ProfessorAvailabilityTab';
-import { ArrowBack } from '@mui/icons-material';
+import { ArrowBack, MenuBook as CourseIcon, School as SemesterIcon } from '@mui/icons-material';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -38,7 +39,6 @@ interface TabPanelProps {
 
 function TabPanel(props: TabPanelProps) {
   const { children, value, index, ...other } = props;
-
   return (
     <div
       role="tabpanel"
@@ -62,6 +62,7 @@ const ProfessorDetails: React.FC = () => {
   const [professor, setProfessor] = useState<Professor | null>(null);
   const [department, setDepartment] = useState<Department | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
+  const [assignedCourses, setAssignedCourses] = useState<Course[]>([]);
   const [availabilities, setAvailabilities] = useState<ProfessorAvailability[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -82,9 +83,17 @@ const ProfessorDetails: React.FC = () => {
         const departmentData = await departmentService.getDepartmentById(professorData.department_id);
         setDepartment(departmentData);
         
-        // Fetch courses taught by the professor
-        const coursesData = await courseService.getCoursesByProfessor(id);
-        setCourses(coursesData);
+        // Fetch all courses for this department
+        const allCoursesData = await courseService.getAllCourses();
+        setCourses(allCoursesData);
+        
+        // Filter courses assigned to this professor
+        if (professorData.course_ids && professorData.course_ids.length > 0) {
+          const professorCourses = allCoursesData.filter(
+            course => professorData.course_ids?.includes(course.course_id)
+          );
+          setAssignedCourses(professorCourses);
+        }
         
         // Fetch professor availability
         const availabilityData = await professorService.getProfessorAvailability(id);
@@ -97,7 +106,6 @@ const ProfessorDetails: React.FC = () => {
         setLoading(false);
       }
     };
-
     fetchData();
   }, [id]);
 
@@ -116,7 +124,7 @@ const ProfessorDetails: React.FC = () => {
       day: 'numeric'
     });
   };
-
+  
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
@@ -133,6 +141,7 @@ const ProfessorDetails: React.FC = () => {
     );
   }
 
+  
   return (
     <Container maxWidth="lg">
       <Box sx={{ mt: 4, mb: 4 }}>
@@ -159,6 +168,24 @@ const ProfessorDetails: React.FC = () => {
               <Typography variant="body1" gutterBottom>
                 Department: {department?.name || 'Unknown Department'}
               </Typography>
+              
+              {/* Show semester tags */}
+              {professor.semesters && professor.semesters.length > 0 && (
+                <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography variant="body1">Semesters:</Typography>
+                  <Box sx={{ display: 'flex', gap: 0.5 }}>
+                    {professor.semesters.map(semester => (
+                      <Chip
+                        key={semester}
+                        label={semester}
+                        color={semester === 'Fall' ? 'warning' : 'success'}
+                        size="small"
+                        icon={<SemesterIcon />}
+                      />
+                    ))}
+                  </Box>
+                </Box>
+              )}
             </Grid>
             <Grid item xs={12} md={4} sx={{ textAlign: { xs: 'left', md: 'right' } }}>
               <Typography variant="body2" color="text.secondary">
@@ -193,33 +220,52 @@ const ProfessorDetails: React.FC = () => {
                 <Divider sx={{ my: 2 }} />
                 <List>
                   <ListItem divider>
-                    <ListItemText 
-                      primary="Full Name" 
-                      secondary={`${professor.first_name} ${professor.last_name}`} 
+                    <ListItemText
+                      primary="Full Name"
+                      secondary={`${professor.first_name} ${professor.last_name}`}
                     />
                   </ListItem>
                   <ListItem divider>
-                    <ListItemText 
-                      primary="Email" 
-                      secondary={professor.email} 
+                    <ListItemText
+                      primary="Email"
+                      secondary={professor.email}
                     />
                   </ListItem>
                   <ListItem divider>
-                    <ListItemText 
-                      primary="Department" 
-                      secondary={department?.name || 'Unknown Department'} 
+                    <ListItemText
+                      primary="Department"
+                      secondary={department?.name || 'Unknown Department'}
                     />
                   </ListItem>
                   <ListItem divider>
-                    <ListItemText 
-                      primary="Professor ID" 
-                      secondary={professor.professor_id} 
+                    <ListItemText
+                      primary="Professor ID"
+                      secondary={professor.professor_id}
+                    />
+                  </ListItem>
+                  <ListItem divider>
+                    <ListItemText
+                      primary="Semesters"
+                      secondary={
+                        professor.semesters && professor.semesters.length > 0 ? (
+                          <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5 }}>
+                            {professor.semesters.map(semester => (
+                              <Chip
+                                key={semester}
+                                label={semester}
+                                color={semester === 'Fall' ? 'warning' : 'success'}
+                                size="small"
+                              />
+                            ))}
+                          </Box>
+                        ) : 'No semesters assigned'
+                      }
                     />
                   </ListItem>
                   <ListItem>
-                    <ListItemText 
-                      primary="Account Status" 
-                      secondary="Active" 
+                    <ListItemText
+                      primary="Account Status"
+                      secondary="Active"
                     />
                   </ListItem>
                 </List>
@@ -235,7 +281,7 @@ const ProfessorDetails: React.FC = () => {
                 </Typography>
                 <Divider sx={{ my: 2 }} />
                 
-                {courses.length > 0 ? (
+                {assignedCourses.length > 0 ? (
                   <TableContainer>
                     <Table>
                       <TableHead>
@@ -244,20 +290,24 @@ const ProfessorDetails: React.FC = () => {
                           <TableCell>Course Name</TableCell>
                           <TableCell>Type</TableCell>
                           <TableCell>Duration</TableCell>
-                          <TableCell>Department</TableCell>
+                          <TableCell>Semester</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {courses.map((course) => (
+                        {assignedCourses.map((course) => (
                           <TableRow key={course.course_id}>
                             <TableCell>{course.course_id}</TableCell>
                             <TableCell>{course.course_name}</TableCell>
                             <TableCell>{course.is_core ? 'Core' : 'Elective'}</TableCell>
                             <TableCell>{course.duration_minutes} minutes</TableCell>
                             <TableCell>
-                              {department && department.department_id === course.department_id
-                                ? department.name
-                                : course.department_id}
+                              {course.semester ? (
+                                <Chip
+                                  label={course.semester}
+                                  color={course.semester === 'Fall' ? 'warning' : 'success'}
+                                  size="small"
+                                />
+                              ) : 'Not specified'}
                             </TableCell>
                           </TableRow>
                         ))}
@@ -274,8 +324,8 @@ const ProfessorDetails: React.FC = () => {
           </TabPanel>
           
           <TabPanel value={tabValue} index={2}>
-            <ProfessorAvailabilityTab 
-              professorId={professor.professor_id} 
+            <ProfessorAvailabilityTab
+              professorId={professor.professor_id}
               availabilities={availabilities}
               onAvailabilityChange={(newAvailabilities) => setAvailabilities(newAvailabilities)}
             />
@@ -287,4 +337,3 @@ const ProfessorDetails: React.FC = () => {
 };
 
 export default ProfessorDetails;
-

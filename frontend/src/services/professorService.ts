@@ -3,10 +3,10 @@
 import { v4 as uuidv4 } from 'uuid';
 
 // Define the base API URL
-//const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
 
 // Types
+
 export interface Professor {
   professor_id: string;
   department_id: string;
@@ -14,6 +14,8 @@ export interface Professor {
   last_name: string;
   email: string;
   password_hash: string;
+  semesters?: string[];    // Add this field for semester availability
+  course_ids?: string[];   // Add this field for assigned courses
   created_at: string;
   updated_at: string;
 }
@@ -44,11 +46,9 @@ export const getAllProfessors = async (): Promise<Professor[]> => {
         'Content-Type': 'application/json'
       }
     });
-
     if (!response.ok) {
       throw new Error('Failed to fetch professors');
     }
-
     const data = await response.json();
     return data;
   } catch (error) {
@@ -67,16 +67,47 @@ export const getProfessorsByDepartment = async (departmentId: string): Promise<P
         'Content-Type': 'application/json'
       }
     });
-
     if (!response.ok) {
       throw new Error('Failed to fetch professors by department');
     }
-
     const data = await response.json();
     return data;
   } catch (error) {
     console.error(`Error in getProfessorsByDepartment for departmentId ${departmentId}:`, error);
     throw error;
+  }
+};
+
+// Fetch professors by course
+export const getProfessorsByCourse = async (courseId: string): Promise<Professor[]> => {
+  try {
+    const token = localStorage.getItem('token');
+    const response = await fetch(`${API_URL}/professors/course/${courseId}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    if (!response.ok) {
+      throw new Error('Failed to fetch professors by course');
+    }
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error(`Error in getProfessorsByCourse for courseId ${courseId}:`, error);
+    
+    // Fallback approach if endpoint doesn't exist yet:
+    // 1. Get all professors
+    // 2. Filter for those with the course ID in their course_ids array
+    try {
+      const allProfessors = await getAllProfessors();
+      return allProfessors.filter(
+        professor => professor.course_ids?.includes(courseId)
+      );
+    } catch (fallbackError) {
+      console.error('Fallback approach also failed:', fallbackError);
+      throw error;
+    }
   }
 };
 
@@ -90,11 +121,9 @@ export const getProfessorById = async (id: string): Promise<ProfessorDetail> => 
         'Content-Type': 'application/json'
       }
     });
-
     if (!response.ok) {
       throw new Error('Failed to fetch professor');
     }
-
     const data = await response.json();
     return data;
   } catch (error) {
@@ -113,11 +142,9 @@ export const getProfessorAvailability = async (professorId: string): Promise<Pro
         'Content-Type': 'application/json'
       }
     });
-
     if (!response.ok) {
       throw new Error('Failed to fetch professor availability');
     }
-
     const data = await response.json();
     return data;
   } catch (error) {
@@ -141,11 +168,9 @@ export const setProfessorAvailability = async (
       },
       body: JSON.stringify(availabilities)
     });
-
     if (!response.ok) {
       throw new Error('Failed to set professor availability');
     }
-
     const data = await response.json();
     return data;
   } catch (error) {
@@ -172,12 +197,10 @@ export const createProfessor = async (professor: Partial<Professor>): Promise<Pr
       },
       body: JSON.stringify(professor)
     });
-
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(errorData.message || 'Failed to create professor');
     }
-
     const data = await response.json();
     return data;
   } catch (error) {
@@ -198,12 +221,10 @@ export const updateProfessor = async (id: string, professor: Partial<Professor>)
       },
       body: JSON.stringify(professor)
     });
-
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(errorData.message || 'Failed to update professor');
     }
-
     const data = await response.json();
     return data;
   } catch (error) {
@@ -223,12 +244,10 @@ export const deleteProfessor = async (id: string): Promise<{ success: boolean; m
         'Content-Type': 'application/json'
       }
     });
-
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(errorData.message || 'Failed to delete professor');
     }
-
     const data = await response.json();
     return { success: true, message: data.message || 'Professor deleted successfully' };
   } catch (error) {
@@ -249,12 +268,10 @@ export const deleteProfessors = async (ids: string[]): Promise<{ success: boolea
       },
       body: JSON.stringify({ ids })
     });
-
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(errorData.message || 'Failed to delete professors');
     }
-
     const data = await response.json();
     return { success: true, message: data.message || 'Professors deleted successfully' };
   } catch (error) {
@@ -266,6 +283,7 @@ export const deleteProfessors = async (ids: string[]): Promise<{ success: boolea
 const professorService = {
   getAllProfessors,
   getProfessorsByDepartment,
+  getProfessorsByCourse,
   getProfessorById,
   getProfessorAvailability,
   setProfessorAvailability,

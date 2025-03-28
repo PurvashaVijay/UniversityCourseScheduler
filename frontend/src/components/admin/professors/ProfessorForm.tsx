@@ -12,16 +12,25 @@ import {
   InputLabel,
   MenuItem,
   Select,
-  TextField
+  TextField,
+  Box,
+  Checkbox,
+  FormControlLabel,
+  ListItemText,
+  Chip,
+  OutlinedInput,
+  Typography
 } from '@mui/material';
 import { Professor } from '../../../services/professorService';
 import { Department } from '../../../services/departmentService';
+import { Course } from '../../../services/courseService';
 import { SelectChangeEvent } from '@mui/material/Select';
 
 interface ProfessorFormProps {
   open: boolean;
   professor: Professor | null;
   departments: Department[];
+  courses: Course[];
   onClose: () => void;
   onSave: (professor: Professor) => void;
 }
@@ -30,6 +39,7 @@ const ProfessorForm: React.FC<ProfessorFormProps> = ({
   open,
   professor,
   departments,
+  courses,
   onClose,
   onSave
 }) => {
@@ -40,18 +50,26 @@ const ProfessorForm: React.FC<ProfessorFormProps> = ({
     last_name: '',
     email: '',
     password_hash: '',
+    semesters: [],
+    course_ids: [],
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   });
-  
-  const [password, setPassword] = useState('');
+
   const [errors, setErrors] = useState<Record<string, string>>({});
+  
+  // Filter courses based on selected department
+  const filteredCourses = formData.department_id 
+    ? courses.filter(course => course.department_id === formData.department_id)
+    : [];
 
   useEffect(() => {
     if (professor) {
       setFormData({
         ...professor,
-        password_hash: '' // Don't show the actual hash
+        // Initialize with empty arrays if not present
+        semesters: professor.semesters || [],
+        course_ids: professor.course_ids || []
       });
     } else {
       // For new professors, reset the form
@@ -62,11 +80,13 @@ const ProfessorForm: React.FC<ProfessorFormProps> = ({
         last_name: '',
         email: '',
         password_hash: '',
+        semesters: [],
+        course_ids: [],
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       });
     }
-    setPassword('');
+    
     setErrors({});
   }, [professor, departments]);
 
@@ -91,15 +111,36 @@ const ProfessorForm: React.FC<ProfessorFormProps> = ({
     }
   };
 
-  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setPassword(e.target.value);
-    if (errors.password) {
-      setErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors.password;
-        return newErrors;
-      });
+  const handleSemesterChange = (semester: string) => {
+    const currentSemesters = [...(formData.semesters || [])];
+    const index = currentSemesters.indexOf(semester);
+    
+    if (index > -1) {
+      // Remove semester if already selected
+      currentSemesters.splice(index, 1);
+    } else {
+      // Add semester if not selected
+      currentSemesters.push(semester);
     }
+    
+    setFormData({
+      ...formData,
+      semesters: currentSemesters
+    });
+  };
+
+  const handleCourseChange = (event: SelectChangeEvent<string[]>) => {
+    const {
+      target: { value },
+    } = event;
+    
+    // On autofill we get a stringified value.
+    const courseIds = typeof value === 'string' ? value.split(',') : value;
+    
+    setFormData({
+      ...formData,
+      course_ids: courseIds
+    });
   };
 
   const validateForm = (): boolean => {
@@ -123,11 +164,6 @@ const ProfessorForm: React.FC<ProfessorFormProps> = ({
       newErrors.department_id = 'Department is required';
     }
     
-    // Password is required only for new professors
-    if (!professor && !password) {
-      newErrors.password = 'Password is required for new professors';
-    }
-    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -138,12 +174,6 @@ const ProfessorForm: React.FC<ProfessorFormProps> = ({
         ...formData,
         updated_at: new Date().toISOString()
       };
-      
-      if (password) {
-        // For simplicity, we're just using the password directly here
-        // In a real implementation, the backend would hash this
-        professorData.password_hash = password;
-      }
       
       onSave(professorData);
     }
@@ -215,19 +245,81 @@ const ProfessorForm: React.FC<ProfessorFormProps> = ({
               )}
             </FormControl>
           </Grid>
+          
           <Grid item xs={12}>
-            <TextField
-              name="password"
-              label={professor ? "New Password (leave blank to keep current)" : "Password"}
-              type="password"
-              fullWidth
-              value={password}
-              onChange={handlePasswordChange}
-              error={!!errors.password}
-              helperText={errors.password}
-              required={!professor}
-            />
+            <Box sx={{ mt: 2, mb: 1 }}>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                Semester Availability
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={formData.semesters?.includes('Fall') || false}
+                      onChange={() => handleSemesterChange('Fall')}
+                    />
+                  }
+                  label="Fall"
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={formData.semesters?.includes('Spring') || false}
+                      onChange={() => handleSemesterChange('Spring')}
+                    />
+                  }
+                  label="Spring"
+                />
+              </Box>
+            </Box>
           </Grid>
+          
+          <Grid item xs={12}>
+            <FormControl fullWidth sx={{ mt: 1 }}>
+              <InputLabel id="courses-select-label">Courses</InputLabel>
+              <Select
+                labelId="courses-select-label"
+                multiple
+                value={formData.course_ids || []}
+                onChange={handleCourseChange}
+                input={<OutlinedInput label="Courses" />}
+                renderValue={(selected) => (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {selected.map((value) => {
+                      const course = courses.find(c => c.course_id === value);
+                      return <Chip key={value} label={course ? course.course_name : value} />;
+                    })}
+                  </Box>
+                )}
+                MenuProps={{
+                  PaperProps: {
+                    style: {
+                      maxHeight: 48 * 4.5 + 8,
+                      width: 250,
+                    },
+                  },
+                }}
+              >
+                {filteredCourses.map((course) => (
+                  <MenuItem key={course.course_id} value={course.course_id}>
+                    <Checkbox checked={(formData.course_ids || []).indexOf(course.course_id) > -1} />
+                    <ListItemText 
+                      primary={course.course_name} 
+                      secondary={`${course.course_id} (${course.is_core ? 'Core' : 'Elective'})`} 
+                    />
+                  </MenuItem>
+                ))}
+                {filteredCourses.length === 0 && (
+                  <MenuItem disabled>
+                    {formData.department_id 
+                      ? 'No courses available for this department' 
+                      : 'Please select a department first'}
+                  </MenuItem>
+                )}
+              </Select>
+            </FormControl>
+          </Grid>
+          
           {professor && (
             <Grid item xs={12}>
               <TextField
@@ -255,4 +347,3 @@ const ProfessorForm: React.FC<ProfessorFormProps> = ({
 };
 
 export default ProfessorForm;
-
