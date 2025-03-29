@@ -1,4 +1,5 @@
 // ProfessorList.tsx
+// Fixed with properly aligned action buttons
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -27,7 +28,9 @@ import {
   Alert,
   Chip,
   Checkbox,
-  FormControlLabel
+  FormControlLabel,
+  Tooltip,
+  Stack
 } from '@mui/material';
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as VisibilityIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
@@ -37,6 +40,7 @@ import courseService, { Course } from '../../../services/courseService';
 import ProfessorForm from "./ProfessorForm";
 
 const ProfessorList: React.FC = () => {
+  const navigate = useNavigate();
   const [professors, setProfessors] = useState<Professor[]>([]);
   const [filteredProfessors, setFilteredProfessors] = useState<Professor[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -51,15 +55,13 @@ const ProfessorList: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [openForm, setOpenForm] = useState(false);
   const [editProfessor, setEditProfessor] = useState<Professor | null>(null);
-  
-  const navigate = useNavigate();
 
   // Fetch professors, departments, and courses
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        setError(null); // Reset any previous errors
+        setError(null);
         
         let professorsLoaded = false;
         let departmentsLoaded = false;
@@ -115,7 +117,7 @@ const ProfessorList: React.FC = () => {
       }
     };
     fetchData();
-  }, []); // Empty dependency array - only runs once on mount
+  }, []);
 
   // Filter professors when department, course, semester, or search term changes
   useEffect(() => {
@@ -141,7 +143,7 @@ const ProfessorList: React.FC = () => {
         if (!professor.semesters || professor.semesters.length === 0) {
           return false;
         }
-        return selectedSemesters.some(semester => 
+        return selectedSemesters.some(semester =>
           professor.semesters?.includes(semester)
         );
       });
@@ -177,11 +179,11 @@ const ProfessorList: React.FC = () => {
     // Reset course filter when department changes
     setSelectedCourse('');
   };
-  
+
   const handleCourseChange = (event: any) => {
     setSelectedCourse(event.target.value);
   };
-  
+
   const handleSemesterChange = (semester: string) => {
     const currentSemesters = [...selectedSemesters];
     const index = currentSemesters.indexOf(semester);
@@ -260,27 +262,6 @@ const ProfessorList: React.FC = () => {
     const department = departments.find(dept => dept.department_id === departmentId);
     return department ? department.name : 'Unknown Department';
   };
-  
-  // Get course names for a professor
-  const getCoursesForProfessor = (professor: Professor) => {
-    if (!professor.course_ids || professor.course_ids.length === 0) {
-      return 'No courses assigned';
-    }
-    
-    const professorCourses = courses.filter(course => 
-      professor.course_ids?.includes(course.course_id)
-    );
-    
-    if (professorCourses.length === 0) {
-      return 'No courses assigned';
-    }
-    
-    if (professorCourses.length <= 2) {
-      return professorCourses.map(c => c.course_name).join(', ');
-    }
-    
-    return `${professorCourses[0].course_name}, ${professorCourses[1].course_name}, +${professorCourses.length - 2} more`;
-  };
 
   // Get filtered courses based on selected department
   const getFilteredCourses = () => {
@@ -288,6 +269,36 @@ const ProfessorList: React.FC = () => {
       return courses;
     }
     return courses.filter(course => course.department_id === selectedDepartment);
+  };
+
+  // Display courses as chips
+  const renderCourseChips = (professor: Professor) => {
+    if (!professor.course_ids || professor.course_ids.length === 0) {
+      return <Typography variant="body2" color="text.secondary">None</Typography>;
+    }
+    
+    const professorCourses = courses.filter(course =>
+      professor.course_ids?.includes(course.course_id)
+    );
+    
+    if (professorCourses.length === 0) {
+      return <Typography variant="body2" color="text.secondary">None</Typography>;
+    }
+    
+    return (
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+        {professorCourses.map(course => (
+          <Tooltip key={course.course_id} title={course.course_id}>
+            <Chip
+              label={course.course_name}
+              size="small"
+              color={course.is_core ? "primary" : "default"}
+              sx={{ maxWidth: '150px' }}
+            />
+          </Tooltip>
+        ))}
+      </Box>
+    );
   };
 
   if (loading) {
@@ -318,12 +329,14 @@ const ProfessorList: React.FC = () => {
             </Button>
           </Grid>
         </Grid>
+        
         {error && (
           <Alert severity="error" sx={{ mb: 3 }}>
             <AlertTitle>Error</AlertTitle>
             {error}
           </Alert>
         )}
+        
         <Card sx={{ mb: 4 }}>
           <CardContent>
             <Grid container spacing={2}>
@@ -403,14 +416,10 @@ const ProfessorList: React.FC = () => {
                   />
                 </Box>
               </Grid>
-              <Grid item xs={12} sx={{ textAlign: 'right' }}>
-                <Typography variant="body2" color="textSecondary">
-                  {filteredProfessors.length} professors found
-                </Typography>
-              </Grid>
             </Grid>
           </CardContent>
         </Card>
+        
         <Paper sx={{ width: '100%', overflow: 'hidden' }}>
           <TableContainer sx={{ maxHeight: 440 }}>
             <Table stickyHeader aria-label="professors table">
@@ -435,14 +444,14 @@ const ProfessorList: React.FC = () => {
                         <TableCell>{`${professor.first_name} ${professor.last_name}`}</TableCell>
                         <TableCell>{professor.email}</TableCell>
                         <TableCell>{getDepartmentName(professor.department_id)}</TableCell>
-                        <TableCell>{getCoursesForProfessor(professor)}</TableCell>
+                        <TableCell>{renderCourseChips(professor)}</TableCell>
                         <TableCell>
                           {professor.semesters && professor.semesters.length > 0 ? (
                             <Box sx={{ display: 'flex', gap: 0.5 }}>
                               {professor.semesters.map(semester => (
-                                <Chip 
-                                  key={semester} 
-                                  label={semester} 
+                                <Chip
+                                  key={semester}
+                                  label={semester}
                                   size="small"
                                   color={semester === 'Fall' ? 'warning' : 'success'}
                                 />
@@ -453,27 +462,29 @@ const ProfessorList: React.FC = () => {
                           )}
                         </TableCell>
                         <TableCell align="right">
-                          <IconButton
-                            color="primary"
-                            onClick={() => handleViewDetails(professor.professor_id)}
-                            size="small"
-                          >
-                            <VisibilityIcon />
-                          </IconButton>
-                          <IconButton
-                            color="secondary"
-                            onClick={() => handleEditProfessor(professor)}
-                            size="small"
-                          >
-                            <EditIcon />
-                          </IconButton>
-                          <IconButton
-                            color="error"
-                            onClick={() => handleDeleteProfessor(professor.professor_id)}
-                            size="small"
-                          >
-                            <DeleteIcon />
-                          </IconButton>
+                          <Stack direction="row" spacing={1} justifyContent="flex-end">
+                            <IconButton
+                              color="primary"
+                              onClick={() => handleViewDetails(professor.professor_id)}
+                              size="small"
+                            >
+                              <VisibilityIcon />
+                            </IconButton>
+                            <IconButton
+                              color="secondary"
+                              onClick={() => handleEditProfessor(professor)}
+                              size="small"
+                            >
+                              <EditIcon />
+                            </IconButton>
+                            <IconButton
+                              color="error"
+                              onClick={() => handleDeleteProfessor(professor.professor_id)}
+                              size="small"
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          </Stack>
                         </TableCell>
                       </TableRow>
                     ))
@@ -498,6 +509,7 @@ const ProfessorList: React.FC = () => {
           />
         </Paper>
       </Box>
+     
       {/* Professor Form Dialog */}
       {openForm && (
         <ProfessorForm

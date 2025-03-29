@@ -1,4 +1,5 @@
-// ProfessorDetails.tsx
+// Updated ProfessorDetails.tsx
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -23,13 +24,17 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Chip
+  Chip,
+  Tooltip
 } from '@mui/material';
-import professorService, { Professor, ProfessorAvailability } from '../../../services/professorService';
-import departmentService, { Department } from '../../../services/departmentService';
-import courseService, { Course } from '../../../services/courseService';
+import professorService, { Professor, ProfessorAvailability } from
+'../../../services/professorService';
+import departmentService, { Department } from
+'../../../services/departmentService';
+import courseService, { Course } from
+'../../../services/courseService';
 import ProfessorAvailabilityTab from './ProfessorAvailabilityTab';
-import { ArrowBack, MenuBook as CourseIcon, School as SemesterIcon } from '@mui/icons-material';
+import { ArrowBack, School as SemesterIcon } from '@mui/icons-material';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -61,7 +66,6 @@ const ProfessorDetails: React.FC = () => {
   const navigate = useNavigate();
   const [professor, setProfessor] = useState<Professor | null>(null);
   const [department, setDepartment] = useState<Department | null>(null);
-  const [courses, setCourses] = useState<Course[]>([]);
   const [assignedCourses, setAssignedCourses] = useState<Course[]>([]);
   const [availabilities, setAvailabilities] = useState<ProfessorAvailability[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -85,7 +89,6 @@ const ProfessorDetails: React.FC = () => {
         
         // Fetch all courses for this department
         const allCoursesData = await courseService.getAllCourses();
-        setCourses(allCoursesData);
         
         // Filter courses assigned to this professor
         if (professorData.course_ids && professorData.course_ids.length > 0) {
@@ -124,7 +127,32 @@ const ProfessorDetails: React.FC = () => {
       day: 'numeric'
     });
   };
-  
+
+  // Render course chips with tooltips
+  const renderCourseChips = (courses: Course[]) => {
+    if (courses.length === 0) {
+      return <Typography variant="body2" color="text.secondary">No courses assigned</Typography>;
+    }
+    
+    return (
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.8, my: 1 }}>
+        {courses.map(course => (
+          <Tooltip 
+            key={course.course_id} 
+            title={`${course.course_id} - ${course.is_core ? 'Core' : 'Elective'} - ${course.duration_minutes} mins`}
+          >
+            <Chip
+              label={course.course_name}
+              color={course.is_core ? "primary" : "default"}
+              size="medium"
+              sx={{ fontWeight: course.is_core ? 'medium' : 'normal' }}
+            />
+          </Tooltip>
+        ))}
+      </Box>
+    );
+  };
+
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
@@ -141,7 +169,6 @@ const ProfessorDetails: React.FC = () => {
     );
   }
 
-  
   return (
     <Container maxWidth="lg">
       <Box sx={{ mt: 4, mb: 4 }}>
@@ -184,6 +211,14 @@ const ProfessorDetails: React.FC = () => {
                       />
                     ))}
                   </Box>
+                </Box>
+              )}
+              
+              {/* Display assigned courses chips */}
+              {assignedCourses.length > 0 && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="body1">Assigned Courses:</Typography>
+                  {renderCourseChips(assignedCourses)}
                 </Box>
               )}
             </Grid>

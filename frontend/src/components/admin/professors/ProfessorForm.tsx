@@ -1,4 +1,4 @@
-// ProfessorForm.tsx
+// ProfessorForm.tsx with course-specific semester selection
 import React, { useState, useEffect } from 'react';
 import {
   Button,
@@ -17,10 +17,12 @@ import {
   Checkbox,
   FormControlLabel,
   ListItemText,
-  Chip,
-  OutlinedInput,
-  Typography
+  Typography,
+  IconButton,
+  //Divider,
+  Paper
 } from '@mui/material';
+import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { Professor } from '../../../services/professorService';
 import { Department } from '../../../services/departmentService';
 import { Course } from '../../../services/courseService';
@@ -33,6 +35,12 @@ interface ProfessorFormProps {
   courses: Course[];
   onClose: () => void;
   onSave: (professor: Professor) => void;
+}
+
+// Interface for course selection with semester information
+interface CourseSelection {
+  courseId: string;
+  semesters: string[];
 }
 
 const ProfessorForm: React.FC<ProfessorFormProps> = ({
@@ -50,16 +58,17 @@ const ProfessorForm: React.FC<ProfessorFormProps> = ({
     last_name: '',
     email: '',
     password_hash: '',
-    semesters: [],
-    course_ids: [],
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   });
-
+  
   const [errors, setErrors] = useState<Record<string, string>>({});
   
+  // State to manage course selections with their respective semesters
+  const [courseSelections, setCourseSelections] = useState<CourseSelection[]>([]);
+  
   // Filter courses based on selected department
-  const filteredCourses = formData.department_id 
+  const filteredCourses = formData.department_id
     ? courses.filter(course => course.department_id === formData.department_id)
     : [];
 
@@ -67,10 +76,22 @@ const ProfessorForm: React.FC<ProfessorFormProps> = ({
     if (professor) {
       setFormData({
         ...professor,
-        // Initialize with empty arrays if not present
-        semesters: professor.semesters || [],
-        course_ids: professor.course_ids || []
       });
+      
+      // Initialize course selections from existing data
+      if (professor.course_ids && professor.course_ids.length > 0) {
+        const selections: CourseSelection[] = professor.course_ids.map(courseId => {
+          // Check if this course has semester information
+          const courseSemesters = professor.semesters || [];
+          return {
+            courseId,
+            semesters: courseSemesters
+          };
+        });
+        setCourseSelections(selections);
+      } else {
+        setCourseSelections([]);
+      }
     } else {
       // For new professors, reset the form
       setFormData({
@@ -80,11 +101,10 @@ const ProfessorForm: React.FC<ProfessorFormProps> = ({
         last_name: '',
         email: '',
         password_hash: '',
-        semesters: [],
-        course_ids: [],
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       });
+      setCourseSelections([]);
     }
     
     setErrors({});
@@ -111,36 +131,49 @@ const ProfessorForm: React.FC<ProfessorFormProps> = ({
     }
   };
 
-  const handleSemesterChange = (semester: string) => {
-    const currentSemesters = [...(formData.semesters || [])];
-    const index = currentSemesters.indexOf(semester);
+  // Add a new course selection
+  const handleAddCourse = () => {
+    setCourseSelections([...courseSelections, { courseId: '', semesters: [] }]);
+  };
+
+  // Remove a course selection
+  const handleRemoveCourse = (index: number) => {
+    const updatedSelections = [...courseSelections];
+    updatedSelections.splice(index, 1);
+    setCourseSelections(updatedSelections);
+  };
+
+  // Update a specific course selection
+  const handleCourseChange = (index: number, courseId: string) => {
+    const updatedSelections = [...courseSelections];
+    updatedSelections[index] = {
+      ...updatedSelections[index],
+      courseId
+    };
+    setCourseSelections(updatedSelections);
+  };
+
+  // Handle semester selection for a specific course
+  const handleSemesterChange = (index: number, semester: string) => {
+    const updatedSelections = [...courseSelections];
+    const currentSemesters = [...updatedSelections[index].semesters];
     
-    if (index > -1) {
+    const semesterIndex = currentSemesters.indexOf(semester);
+    
+    if (semesterIndex > -1) {
       // Remove semester if already selected
-      currentSemesters.splice(index, 1);
+      currentSemesters.splice(semesterIndex, 1);
     } else {
       // Add semester if not selected
       currentSemesters.push(semester);
     }
     
-    setFormData({
-      ...formData,
+    updatedSelections[index] = {
+      ...updatedSelections[index],
       semesters: currentSemesters
-    });
-  };
-
-  const handleCourseChange = (event: SelectChangeEvent<string[]>) => {
-    const {
-      target: { value },
-    } = event;
+    };
     
-    // On autofill we get a stringified value.
-    const courseIds = typeof value === 'string' ? value.split(',') : value;
-    
-    setFormData({
-      ...formData,
-      course_ids: courseIds
-    });
+    setCourseSelections(updatedSelections);
   };
 
   const validateForm = (): boolean => {
@@ -170,8 +203,21 @@ const ProfessorForm: React.FC<ProfessorFormProps> = ({
 
   const handleSubmit = () => {
     if (validateForm()) {
+      // Extract course IDs and collect all semesters
+      const courseIds = courseSelections
+        .filter(selection => selection.courseId !== '')
+        .map(selection => selection.courseId);
+      
+      // Collect all unique semesters from all course selections
+      const allSemesters = courseSelections
+        .filter(selection => selection.courseId !== '')
+        .flatMap(selection => selection.semesters)
+        .filter((value, index, self) => self.indexOf(value) === index);
+      
       const professorData: Professor = {
         ...formData,
+        course_ids: courseIds,
+        semesters: allSemesters,
         updated_at: new Date().toISOString()
       };
       
@@ -246,78 +292,111 @@ const ProfessorForm: React.FC<ProfessorFormProps> = ({
             </FormControl>
           </Grid>
           
+          {/* Multiple Course Selection Section with Per-Course Semester Selection */}
           <Grid item xs={12}>
-            <Box sx={{ mt: 2, mb: 1 }}>
-              <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                Semester Availability
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 2 }}>
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={formData.semesters?.includes('Fall') || false}
-                      onChange={() => handleSemesterChange('Fall')}
-                    />
-                  }
-                  label="Fall"
-                />
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={formData.semesters?.includes('Spring') || false}
-                      onChange={() => handleSemesterChange('Spring')}
-                    />
-                  }
-                  label="Spring"
-                />
+            <Box sx={{ mt: 2 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="subtitle2">Assigned Courses</Typography>
+                <Button
+                  startIcon={<AddIcon />}
+                  onClick={handleAddCourse}
+                  variant="outlined"
+                  size="small"
+                  disabled={!formData.department_id}
+                >
+                  Add Course
+                </Button>
               </Box>
+              
+              {courseSelections.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  No courses assigned. Click "Add Course" to assign courses.
+                </Typography>
+              ) : (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {courseSelections.map((selection, index) => (
+                    <Paper key={index} variant="outlined" sx={{ p: 2 }}>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <FormControl fullWidth>
+                            <InputLabel id={`course-select-label-${index}`}>Course</InputLabel>
+                            <Select
+                              labelId={`course-select-label-${index}`}
+                              value={selection.courseId}
+                              onChange={(e) => handleCourseChange(index, e.target.value)}
+                              label="Course"
+                              disabled={!formData.department_id}
+                            >
+                              <MenuItem value="">
+                                <em>Select a course</em>
+                              </MenuItem>
+                              {filteredCourses.map((course) => (
+                                <MenuItem
+                                  key={course.course_id}
+                                  value={course.course_id}
+                                  disabled={courseSelections.some(
+                                    s => s.courseId === course.course_id && courseSelections.indexOf(s) !== index
+                                  )}
+                                >
+                                  <ListItemText
+                                    primary={course.course_name}
+                                    secondary={`${course.course_id} (${course.is_core ? 'Core' : 'Elective'})`}
+                                  />
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                          <IconButton
+                            color="error"
+                            onClick={() => handleRemoveCourse(index)}
+                            size="small"
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        </Box>
+                        
+                        {/* Semester selection for this course */}
+                        {selection.courseId && (
+                          <Box sx={{ mt: 1 }}>
+                            <Typography variant="caption" sx={{ mb: 1, display: 'block' }}>
+                              Semester Availability:
+                            </Typography>
+                            <Box sx={{ display: 'flex', gap: 2 }}>
+                              <FormControlLabel
+                                control={
+                                  <Checkbox
+                                    checked={selection.semesters.includes('Fall')}
+                                    onChange={() => handleSemesterChange(index, 'Fall')}
+                                    size="small"
+                                  />
+                                }
+                                label="Fall"
+                              />
+                              <FormControlLabel
+                                control={
+                                  <Checkbox
+                                    checked={selection.semesters.includes('Spring')}
+                                    onChange={() => handleSemesterChange(index, 'Spring')}
+                                    size="small"
+                                  />
+                                }
+                                label="Spring"
+                              />
+                            </Box>
+                          </Box>
+                        )}
+                      </Box>
+                    </Paper>
+                  ))}
+                </Box>
+              )}
+              
+              {filteredCourses.length === 0 && formData.department_id && (
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  No courses available for this department
+                </Typography>
+              )}
             </Box>
-          </Grid>
-          
-          <Grid item xs={12}>
-            <FormControl fullWidth sx={{ mt: 1 }}>
-              <InputLabel id="courses-select-label">Courses</InputLabel>
-              <Select
-                labelId="courses-select-label"
-                multiple
-                value={formData.course_ids || []}
-                onChange={handleCourseChange}
-                input={<OutlinedInput label="Courses" />}
-                renderValue={(selected) => (
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                    {selected.map((value) => {
-                      const course = courses.find(c => c.course_id === value);
-                      return <Chip key={value} label={course ? course.course_name : value} />;
-                    })}
-                  </Box>
-                )}
-                MenuProps={{
-                  PaperProps: {
-                    style: {
-                      maxHeight: 48 * 4.5 + 8,
-                      width: 250,
-                    },
-                  },
-                }}
-              >
-                {filteredCourses.map((course) => (
-                  <MenuItem key={course.course_id} value={course.course_id}>
-                    <Checkbox checked={(formData.course_ids || []).indexOf(course.course_id) > -1} />
-                    <ListItemText 
-                      primary={course.course_name} 
-                      secondary={`${course.course_id} (${course.is_core ? 'Core' : 'Elective'})`} 
-                    />
-                  </MenuItem>
-                ))}
-                {filteredCourses.length === 0 && (
-                  <MenuItem disabled>
-                    {formData.department_id 
-                      ? 'No courses available for this department' 
-                      : 'Please select a department first'}
-                  </MenuItem>
-                )}
-              </Select>
-            </FormControl>
           </Grid>
           
           {professor && (

@@ -1,4 +1,4 @@
-// src/services/professorService.ts
+//ProfessorService.ts
 
 import { v4 as uuidv4 } from 'uuid';
 
@@ -6,7 +6,6 @@ import { v4 as uuidv4 } from 'uuid';
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
 
 // Types
-
 export interface Professor {
   professor_id: string;
   department_id: string;
@@ -14,8 +13,8 @@ export interface Professor {
   last_name: string;
   email: string;
   password_hash: string;
-  semesters?: string[];    // Add this field for semester availability
-  course_ids?: string[];   // Add this field for assigned courses
+  semesters?: string[];    // For semester availability
+  course_ids?: string[];   // For multiple course assignments
   created_at: string;
   updated_at: string;
 }
@@ -189,6 +188,16 @@ export const createProfessor = async (professor: Partial<Professor>): Promise<Pr
       professor.professor_id = `PROF-${uuidv4().substring(0, 8)}`;
     }
     
+    // Ensure course_ids is an array
+    if (!professor.course_ids) {
+      professor.course_ids = [];
+    }
+    
+    // Filter out any empty course selections
+    if (Array.isArray(professor.course_ids)) {
+      professor.course_ids = professor.course_ids.filter(id => id !== '');
+    }
+    
     const response = await fetch(`${API_URL}/professors`, {
       method: 'POST',
       headers: {
@@ -213,6 +222,17 @@ export const createProfessor = async (professor: Partial<Professor>): Promise<Pr
 export const updateProfessor = async (id: string, professor: Partial<Professor>): Promise<Professor> => {
   try {
     const token = localStorage.getItem('token');
+    
+    // Ensure course_ids is an array
+    if (!professor.course_ids) {
+      professor.course_ids = [];
+    }
+    
+    // Filter out any empty course selections
+    if (Array.isArray(professor.course_ids)) {
+      professor.course_ids = professor.course_ids.filter(id => id !== '');
+    }
+    
     const response = await fetch(`${API_URL}/professors/${id}`, {
       method: 'PUT',
       headers: {
@@ -280,6 +300,46 @@ export const deleteProfessors = async (ids: string[]): Promise<{ success: boolea
   }
 };
 
+// Assign courses to a professor
+export const assignCoursesToProfessor = async (professorId: string, courseIds: string[]): Promise<Professor> => {
+  try {
+    const token = localStorage.getItem('token');
+    
+    // Filter out any empty course selections
+    const validCourseIds = courseIds.filter(id => id !== '');
+    
+    const response = await fetch(`${API_URL}/professors/${professorId}/courses`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ course_ids: validCourseIds })
+    });
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to assign courses to professor');
+    }
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error(`Error in assignCoursesToProfessor for professor ID ${professorId}:`, error);
+    
+    // Fallback approach if endpoint doesn't exist:
+    // Update the professor with the course_ids
+    try {
+      const professor = await getProfessorById(professorId);
+      return updateProfessor(professorId, {
+        ...professor,
+        course_ids: courseIds.filter(id => id !== '')
+      });
+    } catch (fallbackError) {
+      console.error('Fallback approach also failed:', fallbackError);
+      throw error;
+    }
+  }
+};
+
 const professorService = {
   getAllProfessors,
   getProfessorsByDepartment,
@@ -290,7 +350,8 @@ const professorService = {
   createProfessor,
   updateProfessor,
   deleteProfessor,
-  deleteProfessors
+  deleteProfessors,
+  assignCoursesToProfessor
 };
 
 export default professorService;
