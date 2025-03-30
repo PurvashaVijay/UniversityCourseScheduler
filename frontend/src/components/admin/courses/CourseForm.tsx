@@ -108,6 +108,13 @@ const CourseForm: React.FC = () => {
             // Log the received data for debugging
             console.log('Loaded course data:', data);
             
+            // Ensure semesters are always handled as an array
+            const loadedSemesters = Array.isArray(data.semesters) ? data.semesters : 
+                                  (data.semesters ? [data.semesters] : []);
+            
+            // Set semester checkboxes
+            setSelectedSemesters(loadedSemesters);
+            
             // Ensure all required fields are set
             setCourse({
               course_id: data.course_id || '',
@@ -117,13 +124,8 @@ const CourseForm: React.FC = () => {
               description: data.description || '',
               duration_minutes: typeof data.duration_minutes === 'number' ? data.duration_minutes : 55,
               is_core: Boolean(data.is_core),
-              semesters: data.semesters || []
+              semesters: loadedSemesters  // Set the semesters here too
             });
-            
-            // Set semester checkboxes if available
-            if (data.semesters) {
-              setSelectedSemesters(data.semesters);
-            }
           } else {
             setSnackbar({
               open: true,

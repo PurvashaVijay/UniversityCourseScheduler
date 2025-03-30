@@ -1,9 +1,9 @@
-// courseController.js
+// courseController.js - Updated with the new getCourseWithSemesters method
 
 const { Op } = require('sequelize');
 
-//const { Course, Department, Program, CourseProgram, CoursePrerequisite } = require('../models');
-const { Course, Department, Program, CourseProgram, CoursePrerequisite } = require('../../app/models');
+const { Course, Department, Program, CourseProgram, CoursePrerequisite, CourseSemester } = require('../../app/models');
+const { sequelize } = require('../../src/config/database');
 
 const { v4: uuidv4 } = require('uuid');
 
@@ -77,6 +77,11 @@ exports.getCourseById = async (req, res) => {
     // Extract program_id from the first course program
     const program_id = coursePrograms.length > 0 ? coursePrograms[0].program_id : null;
 
+    // Get actual semesters from database
+    const courseSemesters = await CourseSemester.findAll({
+      where: { course_id: id }
+    });
+
     // Format the response with all the data needed by the frontend
     const result = {
       course_id: course.course_id,
@@ -88,14 +93,58 @@ exports.getCourseById = async (req, res) => {
       programs: course.programs,
       prerequisites: course.prerequisites,
       department: course.Department,
-      // Add semesters if you have them in your data model
-      semesters: ['Fall', 'Spring'] // This is a placeholder - replace with actual data if available
+      // Add actual semesters from the database
+      semesters: courseSemesters.map(cs => cs.semester)
     };
 
     return res.status(200).json(result);
   } catch (error) {
     console.error('Error getting course details:', error);
     return res.status(500).json({ message: 'Failed to get course details' });
+  }
+};
+
+// NEW METHOD: Get course with semesters
+exports.getCourseWithSemesters = async (req, res) => {
+  try {
+    const courseId = req.params.id;
+    
+    // Find the course
+    const course = await Course.findByPk(courseId, {
+      include: [
+        { model: Department },
+        { 
+          model: Program, 
+          through: CourseProgram 
+        },
+        {
+          model: Course,
+          as: 'prerequisites',
+          through: CoursePrerequisite
+        }
+      ]
+    });
+    
+    if (!course) {
+      return res.status(404).json({ message: 'Course not found' });
+    }
+    
+    // Find associated semesters
+    const courseSemesters = await CourseSemester.findAll({
+      where: { course_id: courseId }
+    });
+    
+    // Extract semester values
+    const semesters = courseSemesters.map(s => s.semester);
+    
+    // Add semesters to course data
+    const courseData = course.toJSON();
+    courseData.semesters = semesters;
+    
+    return res.status(200).json(courseData);
+  } catch (error) {
+    console.error('Error retrieving course with semesters:', error);
+    return res.status(500).json({ message: 'Failed to retrieve course details' });
   }
 };
 
@@ -159,8 +208,16 @@ exports.createCourse = async (req, res) => {
       });
     }
     
-    // Handle semesters if your model supports it
-    // This would depend on your database model - placeholder for now
+    // Handle semesters if provided
+    if (semesters && Array.isArray(semesters)) {
+      console.log('Creating semester associations:', semesters);
+      for (const semester of semesters) {
+        await CourseSemester.create({
+          course_id: newCourse.course_id,
+          semester
+        });
+      }
+    }
     
     // Get the created course with associations
     const course = await Course.findByPk(newCourse.course_id, {
@@ -248,8 +305,18 @@ exports.updateCourse = async (req, res) => {
     
     // Update semester associations if provided
     if (semesters && Array.isArray(semesters)) {
-      // Handle semester associations here if you have a CourseSemester model
       console.log('Updating semesters for course:', semesters);
+      
+      // First, remove all existing semester associations
+      await CourseSemester.destroy({ where: { course_id: id } });
+      
+      // Then create new ones
+      for (const semester of semesters) {
+        await CourseSemester.create({
+          course_id: id,
+          semester
+        });
+      }
     }
     
     // Get the updated course with associations for the response
@@ -292,6 +359,9 @@ exports.deleteCourse = async (req, res) => {
     // Delete related CourseProgram records
     await CourseProgram.destroy({ where: { course_id: courseId } });
     
+    // Delete related CourseSemester records
+    await CourseSemester.destroy({ where: { course_id: courseId } });
+    
     // Delete related CoursePrerequisite records
     await CoursePrerequisite.destroy({ 
       where: { 
@@ -330,6 +400,7 @@ exports.deleteCourses = async (req, res) => {
       if (course) {
         // Delete associated records in junction tables first
         await CourseProgram.destroy({ where: { course_id: id } });
+        await CourseSemester.destroy({ where: { course_id: id } });
         await CoursePrerequisite.destroy({ 
           where: { 
             [Op.or]: [
@@ -380,43 +451,52 @@ exports.getCoursesByDepartment = async (req, res) => {
   }
 };
 
-// Get courses by program - Fixed implementation
+// Modified getCoursesByProgram function to include semesters
 exports.getCoursesByProgram = async (req, res) => {
   try {
     const programId = req.params.programId;
-    console.log(`Fetching courses for program: ${programId}`);
     
-    // First, find the CourseProgram records for this program
+    // Find all CourseProgram records for this program
     const coursePrograms = await CourseProgram.findAll({
       where: { program_id: programId }
     });
     
-    if (!coursePrograms || coursePrograms.length === 0) {
-      console.log(`No courses found for program ${programId}`);
+    // Extract course IDs
+    const courseIds = coursePrograms.map(cp => cp.course_id);
+    console.log(`Found ${courseIds.length} course IDs:`, courseIds.join(', '));
+    
+    if (courseIds.length === 0) {
       return res.status(200).json([]);
     }
     
-    // Extract course IDs from the relationships
-    const courseIds = coursePrograms.map(cp => cp.course_id);
-    console.log(`Found ${courseIds.length} course IDs: ${courseIds.join(', ')}`);
-    
-    // Now fetch the actual courses
+    // Get course details
     const courses = await Course.findAll({
       where: {
         course_id: courseIds
       },
       include: [{ model: Department }]
     });
-    
     console.log(`Retrieved ${courses.length} course details`);
     
-    return res.status(200).json(courses);
+    // Get semester data for each course
+    const results = await Promise.all(courses.map(async (course) => {
+      const courseJson = course.toJSON();
+      
+      // Query for semesters
+      const semesters = await CourseSemester.findAll({
+        where: { course_id: course.course_id }
+      });
+      
+      // Add semesters to course data
+      courseJson.semesters = semesters.map(sem => sem.semester);
+      
+      return courseJson;
+    }));
+    
+    return res.status(200).json(results);
   } catch (error) {
     console.error('Error retrieving program courses:', error);
-    return res.status(500).json({ 
-      message: 'Failed to retrieve program courses',
-      error: error.message 
-    });
+    return res.status(500).json({ message: 'Failed to retrieve program courses' });
   }
 };
 

@@ -59,19 +59,22 @@ const CourseList: React.FC = () => {
       label: 'Duration (min)', 
       minWidth: 120,
       align: 'right' as const,
-      format: (value: number) => value.toString()
+      format: (value: number | undefined) => value?.toString() || '0'
     },
     { 
       id: 'is_core', 
       label: 'Core Course', 
       minWidth: 120,
-      format: (value: boolean) => value ? 'Core' : 'Elective'
+      format: (value: boolean | undefined) => value ? 'Core' : 'Elective'
     },
     {
-      id: 'semesters',  
-      label: 'Semesters',  
+      id: 'semesters',
+      label: 'Semesters',
       minWidth: 120,
-      format: (value: string[]) => Array.isArray(value) ? value.join(', ') : value
+      format: (value: string[] | string | undefined | null) => {
+        if (!value) return '';
+        return Array.isArray(value) ? value.join(', ') : String(value);
+      }
     },
   ];  
 
@@ -138,32 +141,39 @@ const CourseList: React.FC = () => {
     }
   }, [selectedProgram]);
 
-  // Updated loadCourses function with better error handling
+  // Updated loadCourses function using direct fetch
   const loadCourses = async (programId: string) => {
     try {
       setLoadingCourses(true);
       console.log('Loading courses for program:', programId);
       
-      const coursesData = await courseService.getCoursesByProgram(programId);
-      console.log('Received courses data:', coursesData);
-      
-      if (!Array.isArray(coursesData)) {
-        console.error('Expected array but received:', typeof coursesData);
-        setCourses([]);
-        return;
+      const token = localStorage.getItem('token');
+      // Direct fetch to bypass service layer temporarily
+      const response = await fetch(`http://localhost:3000/api/courses/program/${programId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch courses: ${response.status}`);
       }
+
+      const rawData = await response.json();
+      console.log('Raw API response:', rawData);
       
-      // Process each course to ensure uniform data structure
-      const processedCourses = coursesData.map(course => ({
+      // Simple transformation to ensure consistent data structure
+      const processedCourses = rawData.map((course: any) => ({
         course_id: course.course_id,
         program_id: programId,
-        course_name: course.course_name || course.name || '',
-        name: course.course_name || course.name || '',
-        description: course.description || '',
+        course_name: course.course_name || '',
+        name: course.course_name || '',
         department_id: course.department_id || '',
         duration_minutes: course.duration_minutes || 0,
         is_core: Boolean(course.is_core),
-        semesters: course.semesters || []
+        // Handle semesters with fallbacks
+        semesters: Array.isArray(course.semesters) ? course.semesters : []
       }));
       
       console.log('Processed courses:', processedCourses);
@@ -302,30 +312,34 @@ const CourseList: React.FC = () => {
     );
   };
 
-  // Updated filter courses with safer property access
+  // Simplified filtering logic
   const filteredCourses = courses.filter(course => {
-    // Safe access to properties with fallbacks
-    const courseName = (course.course_name || course.name || '').toLowerCase();
-    const courseDesc = (course.description || '').toLowerCase();
-    const courseId = (course.course_id || '').toLowerCase();
-    const searchLower = searchTerm.toLowerCase();
+    // Search filtering
+    const searchMatch = !searchTerm || 
+      course.course_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      course.course_name?.toLowerCase().includes(searchTerm.toLowerCase());
     
-    // Handle search filtering
-    const matchesSearch = !searchTerm || 
-      courseId.includes(searchLower) ||
-      courseName.includes(searchLower) ||
-      courseDesc.includes(searchLower);
-
-    // Handle core course filtering
-    const matchesCore = !showCoreOnly || Boolean(course.is_core);
-
-    // Handle semester filtering with safer access
-    // For MVP all courses are shown regardless of semester filter
-    // This can be enhanced when semester data is properly implemented
-    const matchesSemester = true;
-
-    return matchesSearch && matchesCore && matchesSemester;
+    // Core course filtering
+    const coreMatch = !showCoreOnly || course.is_core;
+    
+    // Semester filtering - temporarily simplified
+    const semesterMatch = selectedSemesters.length === 0 || 
+      (course.semesters && course.semesters.some(sem => 
+        selectedSemesters.includes(sem)
+      ));
+    
+    console.log(
+      `Course ${course.course_id} - search: ${searchMatch}, core: ${coreMatch}, semester: ${semesterMatch}`,
+      `Semesters: ${JSON.stringify(course.semesters)}`
+    );
+    
+    return searchMatch && coreMatch && semesterMatch;
   });
+
+  // Debug logging
+  console.log('Selected semesters:', selectedSemesters);
+  console.log('Total courses:', courses.length);
+  console.log('Filtered courses:', filteredCourses.length);
 
   return (
     <Box>

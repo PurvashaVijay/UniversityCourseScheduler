@@ -8,6 +8,8 @@ const router = express.Router();
 // Main course routes - read operations accessible to all authenticated users
 router.get('/', authenticate, courseController.getAllCourses);
 router.get('/:id', authenticate, courseController.getCourseById);
+// New route for getting course with semesters
+router.get('/:id/with-semesters', authenticate, courseController.getCourseWithSemesters);
 
 // Write operations restricted to admin
 router.post('/', authenticate, authorize('admin'), courseController.createCourse);

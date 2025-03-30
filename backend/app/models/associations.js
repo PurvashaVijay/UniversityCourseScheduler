@@ -4,6 +4,7 @@ const Admin = require('./Admin');
 const Professor = require('./Professor');
 const Course = require('./Course');
 const CourseProgram = require('./CourseProgram');
+const CourseSemester = require('./CourseSemester');
 const CoursePrerequisite = require('./CoursePrerequisite');
 const TimeSlot = require('./TimeSlot');
 const ProfessorAvailability = require('./ProfessorAvailability');
@@ -12,6 +13,7 @@ const Schedule = require('./Schedule');
 const ScheduledCourse = require('./ScheduledCourse');
 const Conflict = require('./Conflict');
 const ConflictCourse = require('./ConflictCourse');
+
 
 function defineAssociations() {
   // Department associations
@@ -35,6 +37,15 @@ function defineAssociations() {
   // Course associations
   Course.belongsTo(Department, { foreignKey: 'department_id' });
   Course.belongsToMany(Program, { through: CourseProgram, foreignKey: 'course_id', otherKey: 'program_id' });
+
+  // Course and CourseSemester associations
+  Course.hasMany(CourseSemester, { 
+    foreignKey: 'course_id',
+    onDelete: 'CASCADE'
+  });
+  CourseSemester.belongsTo(Course, { 
+    foreignKey: 'course_id'
+  });
   
   // Course Prerequisites (self-referencing)
   Course.belongsToMany(Course, { 
