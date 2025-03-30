@@ -38,6 +38,8 @@ export const getCoursesByProgram = async (programId: string): Promise<Course[]> 
     if (!response.ok) {
       throw new Error(`Failed to fetch courses by program: ${response.status} ${response.statusText}`);
     }
+    
+    
 
     const data = await response.json();
     console.log(`Raw API response for program ${programId}:`, data);
@@ -365,6 +367,8 @@ const courseService = {
   getAllCourses: async (): Promise<Course[]> => {
     try {
       const token = localStorage.getItem('token');
+      console.log("Attempting to fetch all courses with token:", token ? "Token exists" : "No token");
+      
       const response = await fetch(`${API_URL}/courses`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -372,17 +376,25 @@ const courseService = {
         }
       });
 
+      console.log("Response status:", response.status, response.statusText);
+      
       if (!response.ok) {
-        throw new Error('Failed to fetch courses');
+        const errorText = await response.text();
+        console.error("Error response:", errorText);
+        throw new Error(`Failed to fetch courses: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
+      console.log("Courses data received:", data);
       return data;
     } catch (error) {
       console.error('Error fetching courses:', error);
+      // Return empty array but log the detailed error
       return [];
     }
   },
+  
+  
 
   getCoursesByProfessor: async (professorId: string): Promise<Course[]> => {
     try {

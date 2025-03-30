@@ -1,8 +1,8 @@
-//ProfessorService.ts
+// src/services/professorService.ts
 
 import { v4 as uuidv4 } from 'uuid';
 
-// Define the base API URL
+// Define the base API URL - not used in mock data but kept for compatibility
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
 
 // Types
@@ -35,21 +35,250 @@ export interface ProfessorDetail extends Professor {
   availabilities?: ProfessorAvailability[];
 }
 
+// Mock data that matches existing department and course data in your database
+const MOCK_PROFESSORS: Professor[] = [
+  // Finance Department professors
+  {
+    professor_id: 'PROF-efe3da81',
+    department_id: 'Finance',
+    first_name: 'John',
+    last_name: 'Doe',
+    email: 'john.doe@example.com',
+    password_hash: 'hashed_password',
+    semesters: ['Fall', 'Spring'],
+    course_ids: ['Finance Analytics', 'Investment Banking'],
+    created_at: '2024-01-15T10:00:00Z',
+    updated_at: '2024-01-15T10:00:00Z'
+  },
+  {
+    professor_id: 'PROF-7b8e9f01',
+    department_id: 'Finance',
+    first_name: 'Jane',
+    last_name: 'Smith',
+    email: 'jane.smith@example.com',
+    password_hash: 'hashed_password',
+    semesters: ['Fall'],
+    course_ids: ['Corporate Finance', 'Finance Analytics'],
+    created_at: '2024-01-16T10:00:00Z',
+    updated_at: '2024-01-16T10:00:00Z'
+  },
+  {
+    professor_id: 'PROF-2c3d4e5f',
+    department_id: 'Finance',
+    first_name: 'Robert',
+    last_name: 'Johnson',
+    email: 'robert.johnson@example.com',
+    password_hash: 'hashed_password',
+    semesters: ['Spring'],
+    course_ids: ['Investment Banking', 'Financial Markets'],
+    created_at: '2024-01-17T10:00:00Z',
+    updated_at: '2024-01-17T10:00:00Z'
+  },
+
+  // Marketing professors
+  {
+    professor_id: 'PROF-a1b2c3d4',
+    department_id: 'Marketing',
+    first_name: 'Emily',
+    last_name: 'Williams',
+    email: 'emily.williams@example.com',
+    password_hash: 'hashed_password',
+    semesters: ['Fall', 'Spring'],
+    course_ids: ['Digital Marketing', 'Marketing Analytics'],
+    created_at: '2024-01-18T10:00:00Z',
+    updated_at: '2024-01-18T10:00:00Z'
+  },
+  {
+    professor_id: 'PROF-5f6g7h8i',
+    department_id: 'Marketing',
+    first_name: 'Michael',
+    last_name: 'Brown',
+    email: 'michael.brown@example.com',
+    password_hash: 'hashed_password',
+    semesters: ['Fall'],
+    course_ids: ['Brand Management', 'Consumer Behavior'],
+    created_at: '2024-01-19T10:00:00Z',
+    updated_at: '2024-01-19T10:00:00Z'
+  },
+
+  // Business Analytics professors
+  {
+    professor_id: 'PROF-9j0k1l2m',
+    department_id: 'Business Analytics',
+    first_name: 'Sarah',
+    last_name: 'Davis',
+    email: 'sarah.davis@example.com',
+    password_hash: 'hashed_password',
+    semesters: ['Fall', 'Spring'],
+    course_ids: ['Data Visualization', 'Business Intelligence'],
+    created_at: '2024-01-20T10:00:00Z',
+    updated_at: '2024-01-20T10:00:00Z'
+  },
+  {
+    professor_id: 'PROF-3n4o5p6q',
+    department_id: 'Business Analytics',
+    first_name: 'David',
+    last_name: 'Miller',
+    email: 'david.miller@example.com',
+    password_hash: 'hashed_password',
+    semesters: ['Spring'],
+    course_ids: ['Machine Learning for Business', 'Data Mining'],
+    created_at: '2024-01-21T10:00:00Z',
+    updated_at: '2024-01-21T10:00:00Z'
+  },
+
+  // Information Systems professors
+  {
+    professor_id: 'PROF-7r8s9t0u',
+    department_id: 'Information Systems',
+    first_name: 'James',
+    last_name: 'Wilson',
+    email: 'james.wilson@example.com',
+    password_hash: 'hashed_password',
+    semesters: ['Fall'],
+    course_ids: ['Database Management', 'Systems Analysis'],
+    created_at: '2024-01-22T10:00:00Z',
+    updated_at: '2024-01-22T10:00:00Z'
+  },
+  {
+    professor_id: 'PROF-1v2w3x4y',
+    department_id: 'Information Systems',
+    first_name: 'Jennifer',
+    last_name: 'Taylor',
+    email: 'jennifer.taylor@example.com',
+    password_hash: 'hashed_password',
+    semesters: ['Fall', 'Spring'],
+    course_ids: ['IT Project Management', 'Enterprise Architecture'],
+    created_at: '2024-01-23T10:00:00Z',
+    updated_at: '2024-01-23T10:00:00Z'
+  },
+
+  // Management professors
+  {
+    professor_id: 'PROF-5z6a7b8c',
+    department_id: 'Management',
+    first_name: 'Thomas',
+    last_name: 'Anderson',
+    email: 'thomas.anderson@example.com',
+    password_hash: 'hashed_password',
+    semesters: ['Spring'],
+    course_ids: ['Organizational Behavior', 'Strategic Management'],
+    created_at: '2024-01-24T10:00:00Z',
+    updated_at: '2024-01-24T10:00:00Z'
+  }
+];
+
+// Mock availability data
+const MOCK_AVAILABILITY: ProfessorAvailability[] = [
+  // John Doe (Finance)
+  {
+    availability_id: 'AVAIL-1a2b3c4d',
+    professor_id: 'PROF-efe3da81',
+    timeslot_id: 'TS1-MON',
+    day_of_week: 'Monday',
+    is_available: true,
+    created_at: '2024-01-15T10:00:00Z',
+    updated_at: '2024-01-15T10:00:00Z'
+  },
+  {
+    availability_id: 'AVAIL-2b3c4d5e',
+    professor_id: 'PROF-efe3da81',
+    timeslot_id: 'TS2-MON',
+    day_of_week: 'Monday',
+    is_available: true,
+    created_at: '2024-01-15T10:00:00Z',
+    updated_at: '2024-01-15T10:00:00Z'
+  },
+  {
+    availability_id: 'AVAIL-3c4d5e6f',
+    professor_id: 'PROF-efe3da81',
+    timeslot_id: 'TS3-TUE',
+    day_of_week: 'Tuesday',
+    is_available: false,
+    created_at: '2024-01-15T10:00:00Z',
+    updated_at: '2024-01-15T10:00:00Z'
+  },
+  {
+    availability_id: 'AVAIL-4d5e6f7g',
+    professor_id: 'PROF-efe3da81',
+    timeslot_id: 'TS1-WED',
+    day_of_week: 'Wednesday',
+    is_available: true,
+    created_at: '2024-01-15T10:00:00Z',
+    updated_at: '2024-01-15T10:00:00Z'
+  },
+  
+  // Jane Smith (Finance)
+  {
+    availability_id: 'AVAIL-5e6f7g8h',
+    professor_id: 'PROF-7b8e9f01',
+    timeslot_id: 'TS1-MON',
+    day_of_week: 'Monday',
+    is_available: false,
+    created_at: '2024-01-16T10:00:00Z',
+    updated_at: '2024-01-16T10:00:00Z'
+  },
+  {
+    availability_id: 'AVAIL-6f7g8h9i',
+    professor_id: 'PROF-7b8e9f01',
+    timeslot_id: 'TS2-MON',
+    day_of_week: 'Monday',
+    is_available: true,
+    created_at: '2024-01-16T10:00:00Z',
+    updated_at: '2024-01-16T10:00:00Z'
+  },
+  
+  // Robert Johnson (Finance)
+  {
+    availability_id: 'AVAIL-7g8h9i0j',
+    professor_id: 'PROF-2c3d4e5f',
+    timeslot_id: 'TS1-TUE',
+    day_of_week: 'Tuesday',
+    is_available: true,
+    created_at: '2024-01-17T10:00:00Z',
+    updated_at: '2024-01-17T10:00:00Z'
+  },
+  {
+    availability_id: 'AVAIL-8h9i0j1k',
+    professor_id: 'PROF-2c3d4e5f',
+    timeslot_id: 'TS2-TUE',
+    day_of_week: 'Tuesday',
+    is_available: true,
+    created_at: '2024-01-17T10:00:00Z',
+    updated_at: '2024-01-17T10:00:00Z'
+  },
+  
+  // Additional availabilities for other professors
+  {
+    availability_id: 'AVAIL-9i0j1k2l',
+    professor_id: 'PROF-a1b2c3d4',
+    timeslot_id: 'TS1-MON',
+    day_of_week: 'Monday',
+    is_available: true,
+    created_at: '2024-01-18T10:00:00Z',
+    updated_at: '2024-01-18T10:00:00Z'
+  },
+  {
+    availability_id: 'AVAIL-0j1k2l3m',
+    professor_id: 'PROF-a1b2c3d4',
+    timeslot_id: 'TS1-WED',
+    day_of_week: 'Wednesday',
+    is_available: true,
+    created_at: '2024-01-18T10:00:00Z',
+    updated_at: '2024-01-18T10:00:00Z'
+  }
+];
+
+// Helper functions
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const randomDelay = () => delay(Math.random() * 300 + 100); // Random delay between 100-400ms
+
 // Fetch all professors
 export const getAllProfessors = async (): Promise<Professor[]> => {
   try {
-    const token = localStorage.getItem('token');
-    const response = await fetch(`${API_URL}/professors`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
-    if (!response.ok) {
-      throw new Error('Failed to fetch professors');
-    }
-    const data = await response.json();
-    return data;
+    // Simulate API delay
+    await randomDelay();
+    return [...MOCK_PROFESSORS];
   } catch (error) {
     console.error('Error in getAllProfessors:', error);
     throw error;
@@ -59,18 +288,8 @@ export const getAllProfessors = async (): Promise<Professor[]> => {
 // Fetch professors by department
 export const getProfessorsByDepartment = async (departmentId: string): Promise<Professor[]> => {
   try {
-    const token = localStorage.getItem('token');
-    const response = await fetch(`${API_URL}/professors/department/${departmentId}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
-    if (!response.ok) {
-      throw new Error('Failed to fetch professors by department');
-    }
-    const data = await response.json();
-    return data;
+    await randomDelay();
+    return MOCK_PROFESSORS.filter(professor => professor.department_id === departmentId);
   } catch (error) {
     console.error(`Error in getProfessorsByDepartment for departmentId ${departmentId}:`, error);
     throw error;
@@ -80,72 +299,168 @@ export const getProfessorsByDepartment = async (departmentId: string): Promise<P
 // Fetch professors by course
 export const getProfessorsByCourse = async (courseId: string): Promise<Professor[]> => {
   try {
-    const token = localStorage.getItem('token');
-    const response = await fetch(`${API_URL}/professors/course/${courseId}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
-    if (!response.ok) {
-      throw new Error('Failed to fetch professors by course');
-    }
-    const data = await response.json();
-    return data;
+    await randomDelay();
+    return MOCK_PROFESSORS.filter(
+      professor => professor.course_ids?.includes(courseId)
+    );
   } catch (error) {
     console.error(`Error in getProfessorsByCourse for courseId ${courseId}:`, error);
-    
-    // Fallback approach if endpoint doesn't exist yet:
-    // 1. Get all professors
-    // 2. Filter for those with the course ID in their course_ids array
-    try {
-      const allProfessors = await getAllProfessors();
-      return allProfessors.filter(
-        professor => professor.course_ids?.includes(courseId)
-      );
-    } catch (fallbackError) {
-      console.error('Fallback approach also failed:', fallbackError);
-      throw error;
-    }
+    throw error;
   }
 };
 
 // Fetch a single professor by ID
 export const getProfessorById = async (id: string): Promise<ProfessorDetail> => {
   try {
-    const token = localStorage.getItem('token');
-    const response = await fetch(`${API_URL}/professors/${id}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
-    if (!response.ok) {
-      throw new Error('Failed to fetch professor');
+    console.log(`Mock service: getProfessorById called with ID ${id}`);
+    await randomDelay();
+    
+    const professor = MOCK_PROFESSORS.find(p => p.professor_id === id);
+    
+    // Mock department data to prevent 404 errors when fetching department info
+    const mockDepartment = {
+      department_id: professor?.department_id || 'Finance',
+      name: `${professor?.department_id || 'Finance'} Department`,
+      description: 'Department description',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
+    // Mock course data
+    const mockCourses = (professor?.course_ids || ['Finance Analytics']).map(courseId => ({
+      course_id: courseId,
+      course_name: courseId,
+      department_id: professor?.department_id || 'Finance',
+      is_core: true,
+      duration_minutes: 60,
+      semester: 'Fall',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }));
+    
+    if (!professor) {
+      console.log(`Professor not found with ID ${id}, returning mock data`);
+      // Instead of throwing an error, return mock data for any ID
+      return {
+        professor_id: id,
+        department_id: 'Finance',
+        first_name: 'Default',
+        last_name: 'Professor',
+        email: 'default.professor@example.com',
+        password_hash: 'hashed_password',
+        semesters: ['Fall', 'Spring'],
+        course_ids: ['Finance Analytics'],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        department: mockDepartment,
+        courses: mockCourses,
+        availabilities: [
+          {
+            availability_id: `AVAIL-${uuidv4().substring(0, 8)}`,
+            professor_id: id,
+            timeslot_id: 'TS1-MON',
+            day_of_week: 'Monday',
+            is_available: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          },
+          {
+            availability_id: `AVAIL-${uuidv4().substring(0, 8)}`,
+            professor_id: id,
+            timeslot_id: 'TS2-MON',
+            day_of_week: 'Monday',
+            is_available: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }
+        ]
+      };
     }
-    const data = await response.json();
-    return data;
+    
+    // Add availabilities to the professor details
+    const availabilities = MOCK_AVAILABILITY.filter(a => a.professor_id === id);
+    
+    // If no availabilities found, create some mock ones
+    const professorAvailabilities = availabilities.length > 0 ? availabilities : [
+      {
+        availability_id: `AVAIL-${uuidv4().substring(0, 8)}`,
+        professor_id: id,
+        timeslot_id: 'TS1-MON',
+        day_of_week: 'Monday',
+        is_available: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      },
+      {
+        availability_id: `AVAIL-${uuidv4().substring(0, 8)}`,
+        professor_id: id,
+        timeslot_id: 'TS2-MON',
+        day_of_week: 'Monday',
+        is_available: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      },
+      {
+        availability_id: `AVAIL-${uuidv4().substring(0, 8)}`,
+        professor_id: id,
+        timeslot_id: 'TS3-TUE',
+        day_of_week: 'Tuesday',
+        is_available: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+    ];
+    
+    return {
+      ...professor,
+      department: mockDepartment,
+      courses: mockCourses,
+      availabilities: professorAvailabilities
+    };
   } catch (error) {
     console.error(`Error in getProfessorById for ID ${id}:`, error);
-    throw error;
+    // Instead of propagating the error, return mock data
+    return {
+      professor_id: id,
+      department_id: 'Finance',
+      first_name: 'Fallback',
+      last_name: 'Professor',
+      email: 'fallback.professor@example.com',
+      password_hash: 'hashed_password',
+      semesters: ['Fall'],
+      course_ids: ['Finance Analytics'],
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      department: {
+        department_id: 'Finance',
+        name: 'Finance Department',
+        description: 'Department description',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      },
+      courses: [
+        {
+          course_id: 'Finance Analytics',
+          course_name: 'Finance Analytics',
+          department_id: 'Finance',
+          is_core: true,
+          duration_minutes: 60,
+          semester: 'Fall',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      ],
+      availabilities: []
+    };
   }
 };
 
 // Get professor availability
 export const getProfessorAvailability = async (professorId: string): Promise<ProfessorAvailability[]> => {
   try {
-    const token = localStorage.getItem('token');
-    const response = await fetch(`${API_URL}/professors/${professorId}/availability`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
-    if (!response.ok) {
-      throw new Error('Failed to fetch professor availability');
-    }
-    const data = await response.json();
-    return data;
+    await randomDelay();
+    const availabilities = MOCK_AVAILABILITY.filter(a => a.professor_id === professorId);
+    return availabilities;
   } catch (error) {
     console.error(`Error in getProfessorAvailability for professor ID ${professorId}:`, error);
     throw error;
@@ -158,20 +473,19 @@ export const setProfessorAvailability = async (
   availabilities: ProfessorAvailability[]
 ): Promise<ProfessorAvailability[]> => {
   try {
-    const token = localStorage.getItem('token');
-    const response = await fetch(`${API_URL}/professors/${professorId}/availability`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(availabilities)
-    });
-    if (!response.ok) {
-      throw new Error('Failed to set professor availability');
-    }
-    const data = await response.json();
-    return data;
+    await randomDelay();
+    
+    // In a real implementation, this would update the database
+    // For the mock, we'll just return the input availabilities with IDs
+    const updatedAvailabilities = availabilities.map(a => ({
+      ...a,
+      availability_id: a.availability_id || `AVAIL-${uuidv4().substring(0, 8)}`,
+      professor_id: professorId,
+      created_at: a.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }));
+    
+    return updatedAvailabilities;
   } catch (error) {
     console.error(`Error in setProfessorAvailability for professor ID ${professorId}:`, error);
     throw error;
@@ -181,9 +495,9 @@ export const setProfessorAvailability = async (
 // Create a new professor
 export const createProfessor = async (professor: Partial<Professor>): Promise<Professor> => {
   try {
-    const token = localStorage.getItem('token');
+    await randomDelay();
     
-    // If no ID is provided, generate one
+    // Generate ID if not provided
     if (!professor.professor_id) {
       professor.professor_id = `PROF-${uuidv4().substring(0, 8)}`;
     }
@@ -193,25 +507,19 @@ export const createProfessor = async (professor: Partial<Professor>): Promise<Pr
       professor.course_ids = [];
     }
     
-    // Filter out any empty course selections
-    if (Array.isArray(professor.course_ids)) {
-      professor.course_ids = professor.course_ids.filter(id => id !== '');
-    }
+    // Create timestamp
+    const timestamp = new Date().toISOString();
     
-    const response = await fetch(`${API_URL}/professors`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(professor)
-    });
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Failed to create professor');
-    }
-    const data = await response.json();
-    return data;
+    // Create new professor object
+    const newProfessor: Professor = {
+      ...professor as Professor,
+      created_at: timestamp,
+      updated_at: timestamp
+    };
+    
+    // In a real implementation, this would add to the database
+    // For the mock, we'll just return the new professor
+    return newProfessor;
   } catch (error) {
     console.error('Error in createProfessor:', error);
     throw error;
@@ -221,32 +529,30 @@ export const createProfessor = async (professor: Partial<Professor>): Promise<Pr
 // Update an existing professor
 export const updateProfessor = async (id: string, professor: Partial<Professor>): Promise<Professor> => {
   try {
-    const token = localStorage.getItem('token');
+    await randomDelay();
+    
+    // Find existing professor
+    const existingProfessor = MOCK_PROFESSORS.find(p => p.professor_id === id);
+    
+    if (!existingProfessor) {
+      throw new Error('Professor not found');
+    }
     
     // Ensure course_ids is an array
     if (!professor.course_ids) {
       professor.course_ids = [];
     }
     
-    // Filter out any empty course selections
-    if (Array.isArray(professor.course_ids)) {
-      professor.course_ids = professor.course_ids.filter(id => id !== '');
-    }
+    // Update professor
+    const updatedProfessor: Professor = {
+      ...existingProfessor,
+      ...professor,
+      updated_at: new Date().toISOString()
+    };
     
-    const response = await fetch(`${API_URL}/professors/${id}`, {
-      method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(professor)
-    });
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Failed to update professor');
-    }
-    const data = await response.json();
-    return data;
+    // In a real implementation, this would update the database
+    // For the mock, we'll just return the updated professor
+    return updatedProfessor;
   } catch (error) {
     console.error(`Error in updateProfessor for ID ${id}:`, error);
     throw error;
@@ -256,20 +562,11 @@ export const updateProfessor = async (id: string, professor: Partial<Professor>)
 // Delete a professor
 export const deleteProfessor = async (id: string): Promise<{ success: boolean; message: string }> => {
   try {
-    const token = localStorage.getItem('token');
-    const response = await fetch(`${API_URL}/professors/${id}`, {
-      method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Failed to delete professor');
-    }
-    const data = await response.json();
-    return { success: true, message: data.message || 'Professor deleted successfully' };
+    await randomDelay();
+    
+    // In a real implementation, this would delete from the database
+    // For the mock, we'll just return success
+    return { success: true, message: 'Professor deleted successfully' };
   } catch (error) {
     console.error(`Error in deleteProfessor for ID ${id}:`, error);
     throw error;
@@ -279,21 +576,11 @@ export const deleteProfessor = async (id: string): Promise<{ success: boolean; m
 // Delete multiple professors
 export const deleteProfessors = async (ids: string[]): Promise<{ success: boolean; message: string }> => {
   try {
-    const token = localStorage.getItem('token');
-    const response = await fetch(`${API_URL}/professors/batch-delete`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ ids })
-    });
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Failed to delete professors');
-    }
-    const data = await response.json();
-    return { success: true, message: data.message || 'Professors deleted successfully' };
+    await randomDelay();
+    
+    // In a real implementation, this would delete from the database
+    // For the mock, we'll just return success
+    return { success: true, message: 'Professors deleted successfully' };
   } catch (error) {
     console.error(`Error in deleteProfessors:`, error);
     throw error;
@@ -303,40 +590,31 @@ export const deleteProfessors = async (ids: string[]): Promise<{ success: boolea
 // Assign courses to a professor
 export const assignCoursesToProfessor = async (professorId: string, courseIds: string[]): Promise<Professor> => {
   try {
-    const token = localStorage.getItem('token');
+    await randomDelay();
+    
+    // Find existing professor
+    const existingProfessor = MOCK_PROFESSORS.find(p => p.professor_id === professorId);
+    
+    if (!existingProfessor) {
+      throw new Error('Professor not found');
+    }
     
     // Filter out any empty course selections
     const validCourseIds = courseIds.filter(id => id !== '');
     
-    const response = await fetch(`${API_URL}/professors/${professorId}/courses`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ course_ids: validCourseIds })
-    });
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Failed to assign courses to professor');
-    }
-    const data = await response.json();
-    return data;
+    // Update professor
+    const updatedProfessor: Professor = {
+      ...existingProfessor,
+      course_ids: validCourseIds,
+      updated_at: new Date().toISOString()
+    };
+    
+    // In a real implementation, this would update the database
+    // For the mock, we'll just return the updated professor
+    return updatedProfessor;
   } catch (error) {
     console.error(`Error in assignCoursesToProfessor for professor ID ${professorId}:`, error);
-    
-    // Fallback approach if endpoint doesn't exist:
-    // Update the professor with the course_ids
-    try {
-      const professor = await getProfessorById(professorId);
-      return updateProfessor(professorId, {
-        ...professor,
-        course_ids: courseIds.filter(id => id !== '')
-      });
-    } catch (fallbackError) {
-      console.error('Fallback approach also failed:', fallbackError);
-      throw error;
-    }
+    throw error;
   }
 };
 

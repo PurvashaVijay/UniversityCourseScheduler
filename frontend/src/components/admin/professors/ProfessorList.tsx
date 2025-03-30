@@ -1,5 +1,4 @@
-// ProfessorList.tsx
-// Fixed with properly aligned action buttons
+// ProfessorList.tsx - Modified version with course filtering
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -29,8 +28,6 @@ import {
   Chip,
   Checkbox,
   FormControlLabel,
-  Tooltip,
-  Stack
 } from '@mui/material';
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as VisibilityIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
@@ -262,43 +259,13 @@ const ProfessorList: React.FC = () => {
     const department = departments.find(dept => dept.department_id === departmentId);
     return department ? department.name : 'Unknown Department';
   };
-
+  
   // Get filtered courses based on selected department
   const getFilteredCourses = () => {
     if (!selectedDepartment) {
       return courses;
     }
     return courses.filter(course => course.department_id === selectedDepartment);
-  };
-
-  // Display courses as chips
-  const renderCourseChips = (professor: Professor) => {
-    if (!professor.course_ids || professor.course_ids.length === 0) {
-      return <Typography variant="body2" color="text.secondary">None</Typography>;
-    }
-    
-    const professorCourses = courses.filter(course =>
-      professor.course_ids?.includes(course.course_id)
-    );
-    
-    if (professorCourses.length === 0) {
-      return <Typography variant="body2" color="text.secondary">None</Typography>;
-    }
-    
-    return (
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-        {professorCourses.map(course => (
-          <Tooltip key={course.course_id} title={course.course_id}>
-            <Chip
-              label={course.course_name}
-              size="small"
-              color={course.is_core ? "primary" : "default"}
-              sx={{ maxWidth: '150px' }}
-            />
-          </Tooltip>
-        ))}
-      </Box>
-    );
   };
 
   if (loading) {
@@ -329,14 +296,12 @@ const ProfessorList: React.FC = () => {
             </Button>
           </Grid>
         </Grid>
-        
         {error && (
           <Alert severity="error" sx={{ mb: 3 }}>
             <AlertTitle>Error</AlertTitle>
             {error}
           </Alert>
         )}
-        
         <Card sx={{ mb: 4 }}>
           <CardContent>
             <Grid container spacing={2}>
@@ -419,7 +384,6 @@ const ProfessorList: React.FC = () => {
             </Grid>
           </CardContent>
         </Card>
-        
         <Paper sx={{ width: '100%', overflow: 'hidden' }}>
           <TableContainer sx={{ maxHeight: 440 }}>
             <Table stickyHeader aria-label="professors table">
@@ -429,7 +393,6 @@ const ProfessorList: React.FC = () => {
                   <TableCell>Name</TableCell>
                   <TableCell>Email</TableCell>
                   <TableCell>Department</TableCell>
-                  <TableCell>Courses</TableCell>
                   <TableCell>Semesters</TableCell>
                   <TableCell align="right">Actions</TableCell>
                 </TableRow>
@@ -444,7 +407,6 @@ const ProfessorList: React.FC = () => {
                         <TableCell>{`${professor.first_name} ${professor.last_name}`}</TableCell>
                         <TableCell>{professor.email}</TableCell>
                         <TableCell>{getDepartmentName(professor.department_id)}</TableCell>
-                        <TableCell>{renderCourseChips(professor)}</TableCell>
                         <TableCell>
                           {professor.semesters && professor.semesters.length > 0 ? (
                             <Box sx={{ display: 'flex', gap: 0.5 }}>
@@ -462,35 +424,33 @@ const ProfessorList: React.FC = () => {
                           )}
                         </TableCell>
                         <TableCell align="right">
-                          <Stack direction="row" spacing={1} justifyContent="flex-end">
-                            <IconButton
-                              color="primary"
-                              onClick={() => handleViewDetails(professor.professor_id)}
-                              size="small"
-                            >
-                              <VisibilityIcon />
-                            </IconButton>
-                            <IconButton
-                              color="secondary"
-                              onClick={() => handleEditProfessor(professor)}
-                              size="small"
-                            >
-                              <EditIcon />
-                            </IconButton>
-                            <IconButton
-                              color="error"
-                              onClick={() => handleDeleteProfessor(professor.professor_id)}
-                              size="small"
-                            >
-                              <DeleteIcon />
-                            </IconButton>
-                          </Stack>
+                          <IconButton
+                            color="primary"
+                            onClick={() => handleViewDetails(professor.professor_id)}
+                            size="small"
+                          >
+                            <VisibilityIcon />
+                          </IconButton>
+                          <IconButton
+                            color="secondary"
+                            onClick={() => handleEditProfessor(professor)}
+                            size="small"
+                          >
+                            <EditIcon />
+                          </IconButton>
+                          <IconButton
+                            color="error"
+                            onClick={() => handleDeleteProfessor(professor.professor_id)}
+                            size="small"
+                          >
+                            <DeleteIcon />
+                          </IconButton>
                         </TableCell>
                       </TableRow>
                     ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={7} align="center">
+                    <TableCell colSpan={6} align="center">
                       {error ? 'Error loading data' : 'No professors found'}
                     </TableCell>
                   </TableRow>
@@ -509,7 +469,7 @@ const ProfessorList: React.FC = () => {
           />
         </Paper>
       </Box>
-     
+      
       {/* Professor Form Dialog */}
       {openForm && (
         <ProfessorForm

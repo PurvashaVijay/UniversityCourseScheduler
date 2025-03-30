@@ -1,4 +1,4 @@
-// ProfessorForm.tsx with course-specific semester selection
+// ProfessorForm.tsx 
 import React, { useState, useEffect } from 'react';
 import {
   Button,

@@ -1,4 +1,4 @@
-// Updated ProfessorDetails.tsx
+//  ProfessorDetails.tsx
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -27,12 +27,9 @@ import {
   Chip,
   Tooltip
 } from '@mui/material';
-import professorService, { Professor, ProfessorAvailability } from
-'../../../services/professorService';
-import departmentService, { Department } from
-'../../../services/departmentService';
-import courseService, { Course } from
-'../../../services/courseService';
+import professorService, { Professor, ProfessorAvailability } from '../../../services/professorService';
+import departmentService, { Department } from '../../../services/departmentService';
+import courseService, { Course } from '../../../services/courseService';
 import ProfessorAvailabilityTab from './ProfessorAvailabilityTab';
 import { ArrowBack, School as SemesterIcon } from '@mui/icons-material';
 
@@ -137,8 +134,8 @@ const ProfessorDetails: React.FC = () => {
     return (
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.8, my: 1 }}>
         {courses.map(course => (
-          <Tooltip 
-            key={course.course_id} 
+          <Tooltip
+            key={course.course_id}
             title={`${course.course_id} - ${course.is_core ? 'Core' : 'Elective'} - ${course.duration_minutes} mins`}
           >
             <Chip
@@ -278,7 +275,7 @@ const ProfessorDetails: React.FC = () => {
                       secondary={professor.professor_id}
                     />
                   </ListItem>
-                  <ListItem divider>
+                  <ListItem>
                     <ListItemText
                       primary="Semesters"
                       secondary={
@@ -295,12 +292,6 @@ const ProfessorDetails: React.FC = () => {
                           </Box>
                         ) : 'No semesters assigned'
                       }
-                    />
-                  </ListItem>
-                  <ListItem>
-                    <ListItemText
-                      primary="Account Status"
-                      secondary="Active"
                     />
                   </ListItem>
                 </List>
