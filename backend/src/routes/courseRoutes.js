@@ -10,6 +10,8 @@ router.get('/', authenticate, courseController.getAllCourses);
 router.get('/:id', authenticate, courseController.getCourseById);
 // New route for getting course with semesters
 router.get('/:id/with-semesters', authenticate, courseController.getCourseWithSemesters);
+// Add this new route for getting course-professor assignments
+router.get('/:id/professors', authenticate, courseController.getCourseProfessorAssignments);
 
 // Write operations restricted to admin
 router.post('/', authenticate, authorize('admin'), courseController.createCourse);

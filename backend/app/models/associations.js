@@ -13,7 +13,8 @@ const Schedule = require('./Schedule');
 const ScheduledCourse = require('./ScheduledCourse');
 const Conflict = require('./Conflict');
 const ConflictCourse = require('./ConflictCourse');
-
+// Add this line to your associations.js after importing ProfessorCourse
+const ProfessorCourse = require('./ProfessorCourse');
 
 function defineAssociations() {
   // Department associations
@@ -33,6 +34,13 @@ function defineAssociations() {
   Professor.belongsTo(Department, { foreignKey: 'department_id' });
   Professor.hasMany(ProfessorAvailability, { foreignKey: 'professor_id' });
   Professor.hasMany(ScheduledCourse, { foreignKey: 'professor_id' });
+
+  // Add these direct associations
+  ProfessorCourse.belongsTo(Professor, { foreignKey: 'professor_id' });
+  Professor.hasMany(ProfessorCourse, { foreignKey: 'professor_id' });
+
+  ProfessorCourse.belongsTo(Course, { foreignKey: 'course_id' });
+  Course.hasMany(ProfessorCourse, { foreignKey: 'course_id' });
 
   // Course associations
   Course.belongsTo(Department, { foreignKey: 'department_id' });
@@ -94,6 +102,11 @@ function defineAssociations() {
   // ConflictCourse associations
   ConflictCourse.belongsTo(Conflict, { foreignKey: 'conflict_id' });
   ConflictCourse.belongsTo(ScheduledCourse, { foreignKey: 'scheduled_course_id' });
+
+  // Add these associations
+  Professor.belongsToMany(Course, { through: ProfessorCourse, foreignKey: 'professor_id', otherKey: 'course_id' });
+  Course.belongsToMany(Professor, { through: ProfessorCourse, foreignKey: 'course_id', otherKey: 'professor_id' });
+
 }
 
 module.exports = defineAssociations;

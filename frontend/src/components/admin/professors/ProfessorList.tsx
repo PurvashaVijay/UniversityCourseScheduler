@@ -116,51 +116,49 @@ const ProfessorList: React.FC = () => {
     fetchData();
   }, []);
 
-  // Filter professors when department, course, semester, or search term changes
+  // Filter professors when department, semester, search term, or course selection changes
   useEffect(() => {
-    let filtered = [...professors];
-    
-    // Apply department filter
-    if (selectedDepartment) {
-      filtered = filtered.filter(
-        professor => professor.department_id === selectedDepartment
-      );
-    }
-    
-    // Apply course filter
-    if (selectedCourse) {
-      filtered = filtered.filter(
-        professor => professor.course_ids && professor.course_ids.includes(selectedCourse)
-      );
-    }
-    
-    // Apply semester filter
-    if (selectedSemesters.length > 0) {
-      filtered = filtered.filter(professor => {
-        if (!professor.semesters || professor.semesters.length === 0) {
-          return false;
-        }
-        return selectedSemesters.some(semester =>
-          professor.semesters?.includes(semester)
+    // Only apply this filtering when not directly filtering by course selection
+    if (!selectedCourse) {
+      let filtered = [...professors];
+      
+      // Apply department filter
+      if (selectedDepartment) {
+        filtered = filtered.filter(
+          professor => professor.department_id === selectedDepartment
         );
-      });
+      }
+      
+      // Apply semester filter
+      if (selectedSemesters.length > 0) {
+        filtered = filtered.filter(professor => {
+          if (!professor.semesters || professor.semesters.length === 0) {
+            return false;
+          }
+          return selectedSemesters.some(semester =>
+            professor.semesters?.includes(semester)
+          );
+        });
+      }
+      
+      // Apply search filter (case-insensitive)
+      if (searchTerm) {
+        const search = searchTerm.toLowerCase();
+        filtered = filtered.filter(
+          professor =>
+            professor.first_name.toLowerCase().includes(search) ||
+            professor.last_name.toLowerCase().includes(search) ||
+            professor.email.toLowerCase().includes(search) ||
+            professor.professor_id.toLowerCase().includes(search)
+        );
+      }
+      
+      setFilteredProfessors(filtered);
     }
     
-    // Apply search filter (case-insensitive)
-    if (searchTerm) {
-      const search = searchTerm.toLowerCase();
-      filtered = filtered.filter(
-        professor =>
-          professor.first_name.toLowerCase().includes(search) ||
-          professor.last_name.toLowerCase().includes(search) ||
-          professor.email.toLowerCase().includes(search) ||
-          professor.professor_id.toLowerCase().includes(search)
-      );
-    }
-    
-    setFilteredProfessors(filtered);
-    setPage(0); // Reset to first page when filters change
-  }, [professors, selectedDepartment, selectedCourse, selectedSemesters, searchTerm]);
+    // Reset to first page when filters change
+    setPage(0);
+  }, [professors, selectedDepartment, selectedSemesters, searchTerm, selectedCourse]);
 
   const handleChangePage = (event: unknown, newPage: number) => {
     setPage(newPage);
@@ -177,8 +175,36 @@ const ProfessorList: React.FC = () => {
     setSelectedCourse('');
   };
 
-  const handleCourseChange = (event: any) => {
-    setSelectedCourse(event.target.value);
+  const handleCourseChange = async (event: any) => {
+    const courseId = event.target.value;
+    setSelectedCourse(courseId);
+    
+    if (courseId) {
+      try {
+        setLoading(true);
+        // Use the new method to get professors by course
+        const professorsByCourse = await professorService.getProfessorsByCourse(courseId);
+        console.log('Professors filtered by course:', professorsByCourse);
+        
+        // Update filtered professors
+        setFilteredProfessors(professorsByCourse);
+      } catch (err) {
+        console.error(`Error filtering professors by course ${courseId}:`, err);
+        setError('Failed to filter professors by course');
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // If no course selected, reset to filtered by department if needed
+      if (selectedDepartment) {
+        const filteredByDept = professors.filter(
+          professor => professor.department_id === selectedDepartment
+        );
+        setFilteredProfessors(filteredByDept);
+      } else {
+        setFilteredProfessors(professors);
+      }
+    }
   };
 
   const handleSemesterChange = (semester: string) => {
@@ -205,19 +231,39 @@ const ProfessorList: React.FC = () => {
     setOpenForm(true);
   };
 
-  const handleEditProfessor = (professor: Professor) => {
-    setEditProfessor(professor);
-    setOpenForm(true);
+  const handleEditProfessor = async (professor: Professor) => {
+    try {
+      // Before setting the edit professor, fetch complete professor details including courses
+      console.log("Getting full professor details for editing:", professor.professor_id);
+      const fullProfessorData = await professorService.getProfessorById(professor.professor_id);
+      console.log("Full professor data for edit form:", fullProfessorData);
+      
+      // Now set the edit professor with complete data
+      setEditProfessor(fullProfessorData);
+      setOpenForm(true);
+    } catch (err) {
+      console.error("Error getting professor details for editing:", err);
+      // Fall back to basic data if fetch fails
+      setError("Failed to load professor details for editing. Please try again.");
+    }
   };
 
   const handleDeleteProfessor = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this professor?')) {
       try {
-        await professorService.deleteProfessor(id);
-        setProfessors(professors.filter(p => p.professor_id !== id));
+        console.log('Deleting professor with ID:', id);
+        const result = await professorService.deleteProfessor(id);
+        
+        if (result.success) {
+          setProfessors(professors.filter(p => p.professor_id !== id));
+          console.log('Professor deleted successfully');
+        } else {
+          setError(result.message || 'Failed to delete professor');
+          console.error('Error response:', result);
+        }
       } catch (err) {
+        console.error('Error deleting professor:', err);
         setError('Failed to delete professor. Please try again.');
-        console.error(err);
       }
     }
   };
@@ -233,20 +279,24 @@ const ProfessorList: React.FC = () => {
       
       if (professor.professor_id && editProfessor) {
         // Update existing professor
+        console.log('Updating professor:', professor);
         savedProfessor = await professorService.updateProfessor(professor.professor_id, professor);
         setProfessors(professors.map(p =>
           p.professor_id === savedProfessor.professor_id ? savedProfessor : p
         ));
+        console.log('Professor updated successfully');
       } else {
         // Create new professor
+        console.log('Creating new professor:', professor);
         savedProfessor = await professorService.createProfessor(professor);
         setProfessors([...professors, savedProfessor]);
+        console.log('Professor created successfully');
       }
       
       handleCloseForm();
     } catch (err) {
+      console.error('Error saving professor:', err);
       setError('Failed to save professor. Please try again.');
-      console.error(err);
     }
   };
 

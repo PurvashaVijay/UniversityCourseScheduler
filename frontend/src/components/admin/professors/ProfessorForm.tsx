@@ -1,5 +1,5 @@
 // ProfessorForm.tsx 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Button,
   Dialog,
@@ -19,11 +19,13 @@ import {
   ListItemText,
   Typography,
   IconButton,
-  //Divider,
-  Paper
+  Paper,
+  Tooltip,
+  CircularProgress
 } from '@mui/material';
 import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { Professor } from '../../../services/professorService';
+import professorService from '../../../services/professorService';
 import { Department } from '../../../services/departmentService';
 import { Course } from '../../../services/courseService';
 import { SelectChangeEvent } from '@mui/material/Select';
@@ -37,10 +39,29 @@ interface ProfessorFormProps {
   onSave: (professor: Professor) => void;
 }
 
+// Interface for professor assignment
+interface ProfessorAssignment {
+  professor_id: string;
+  professor_name: string;
+  semester: string;
+}
+
+// Interface for course semester information
+interface CourseSemesterInfo {
+  availableSemesters: string[];
+  assignedProfessors: ProfessorAssignment[];
+}
+
 // Interface for course selection with semester information
 interface CourseSelection {
   courseId: string;
-  semesters: string[];
+  selectedSemesters: string[];
+  disabledSemesters: {
+    [semester: string]: {
+      disabled: boolean;
+      reason: string;
+    };
+  };
 }
 
 const ProfessorForm: React.FC<ProfessorFormProps> = ({
@@ -51,6 +72,9 @@ const ProfessorForm: React.FC<ProfessorFormProps> = ({
   onClose,
   onSave
 }) => {
+  // Log all props for debugging
+  console.log('ProfessorForm rendered with props:', { open, professor, departments });
+  
   const [formData, setFormData] = useState<Professor>({
     professor_id: '',
     department_id: '',
@@ -66,30 +90,99 @@ const ProfessorForm: React.FC<ProfessorFormProps> = ({
   
   // State to manage course selections with their respective semesters
   const [courseSelections, setCourseSelections] = useState<CourseSelection[]>([]);
+
+  // State to track course semester info
+  const [courseSemesterInfo, setCourseSemesterInfo] = useState<{
+    [courseId: string]: CourseSemesterInfo;
+  }>({});
+
+  // State to track loading state
+  const [loading, setLoading] = useState<{[courseId: string]: boolean}>({});
   
   // Filter courses based on selected department
   const filteredCourses = formData.department_id
     ? courses.filter(course => course.department_id === formData.department_id)
     : [];
 
+  // Fetch course semester data
+  const fetchCourseSemesterData = useCallback(async (courseId: string) => {
+    if (!courseId) return;
+    
+    // Set loading state for this course
+    setLoading(prev => ({ ...prev, [courseId]: true }));
+    
+    try {
+      // Fetch data about available semesters and professor assignments
+      const data = await professorService.getCourseSemesters(courseId);
+      
+      // Update state with the fetched data
+      setCourseSemesterInfo(prev => ({
+        ...prev,
+        [courseId]: {
+          availableSemesters: data.available_semesters || ['Fall', 'Spring'],
+          assignedProfessors: data.assigned_professors || []
+        }
+      }));
+    } catch (error) {
+      console.error(`Error fetching semester data for course ${courseId}:`, error);
+      // Set default values if there's an error
+      setCourseSemesterInfo(prev => ({
+        ...prev,
+        [courseId]: {
+          availableSemesters: ['Fall', 'Spring'],
+          assignedProfessors: []
+        }
+      }));
+    } finally {
+      setLoading(prev => ({ ...prev, [courseId]: false }));
+    }
+  }, []);
+
   useEffect(() => {
+    // Add comprehensive debugging
+    console.log('Professor in useEffect:', professor);
+    console.log('Professor type:', typeof professor);
+    
     if (professor) {
+      // Log all keys and values
+      console.log('Professor keys:', Object.keys(professor));
+      console.log('Professor values:', Object.values(professor));
+      
+      // Try to access course_ids in different ways
+      console.log('Direct course_ids:', professor.course_ids);
+      console.log('Bracket course_ids:', professor['course_ids']);
+      
       setFormData({
         ...professor,
       });
       
-      // Initialize course selections from existing data
-      if (professor.course_ids && professor.course_ids.length > 0) {
-        const selections: CourseSelection[] = professor.course_ids.map(courseId => {
-          // Check if this course has semester information
-          const courseSemesters = professor.semesters || [];
+      // Debug log to see if course_ids exists
+      console.log('Course IDs from professor:', professor.course_ids);
+      
+      // Check if professor has course_ids
+      if (professor.course_ids && Array.isArray(professor.course_ids) && professor.course_ids.length > 0) {
+        console.log('Found course IDs, setting selections');
+        
+        // Create course selections from the course_ids array
+        const selections = professor.course_ids.map(courseId => {
           return {
             courseId,
-            semesters: courseSemesters
+            selectedSemesters: professor.semesters || ['Fall'],
+            disabledSemesters: {}
           };
         });
+        
+        console.log('Setting course selections:', selections);
         setCourseSelections(selections);
+        
+        // Fetch semester data for each course
+        selections.forEach(selection => {
+          if (selection.courseId) {
+            fetchCourseSemesterData(selection.courseId);
+          }
+        });
       } else {
+        console.log('No course IDs found, setting empty selections');
         setCourseSelections([]);
       }
     } else {
@@ -108,7 +201,7 @@ const ProfessorForm: React.FC<ProfessorFormProps> = ({
     }
     
     setErrors({});
-  }, [professor, departments]);
+  }, [professor, departments, fetchCourseSemesterData]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | { name?: string; value: unknown }> | SelectChangeEvent
@@ -133,7 +226,11 @@ const ProfessorForm: React.FC<ProfessorFormProps> = ({
 
   // Add a new course selection
   const handleAddCourse = () => {
-    setCourseSelections([...courseSelections, { courseId: '', semesters: [] }]);
+    setCourseSelections([...courseSelections, { 
+      courseId: '', 
+      selectedSemesters: [],
+      disabledSemesters: {}
+    }]);
   };
 
   // Remove a course selection
@@ -148,15 +245,28 @@ const ProfessorForm: React.FC<ProfessorFormProps> = ({
     const updatedSelections = [...courseSelections];
     updatedSelections[index] = {
       ...updatedSelections[index],
-      courseId
+      courseId,
+      selectedSemesters: []
     };
     setCourseSelections(updatedSelections);
+    
+    // Fetch semester data for this course
+    if (courseId) {
+      fetchCourseSemesterData(courseId);
+    }
   };
 
   // Handle semester selection for a specific course
   const handleSemesterChange = (index: number, semester: string) => {
     const updatedSelections = [...courseSelections];
-    const currentSemesters = [...updatedSelections[index].semesters];
+    const currentSelection = updatedSelections[index];
+    
+    // Check if the semester is disabled
+    if (currentSelection.disabledSemesters[semester]?.disabled) {
+      return; // Do nothing if the semester is disabled
+    }
+    
+    const currentSemesters = [...currentSelection.selectedSemesters];
     
     const semesterIndex = currentSemesters.indexOf(semester);
     
@@ -169,8 +279,8 @@ const ProfessorForm: React.FC<ProfessorFormProps> = ({
     }
     
     updatedSelections[index] = {
-      ...updatedSelections[index],
-      semesters: currentSemesters
+      ...currentSelection,
+      selectedSemesters: currentSemesters
     };
     
     setCourseSelections(updatedSelections);
@@ -197,31 +307,46 @@ const ProfessorForm: React.FC<ProfessorFormProps> = ({
       newErrors.department_id = 'Department is required';
     }
     
+    // Generate a professor_id if creating a new professor
+    if (!professor && !formData.professor_id) {
+      // We can either generate an ID here or let the backend generate it
+      // For consistency with other forms, let's generate one
+      formData.professor_id = `PROF-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+    }
+    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = () => {
     if (validateForm()) {
-      // Extract course IDs and collect all semesters
+      // Build course_semesters object
+      const course_semesters: {[courseId: string]: string[]} = {};
+      
+      courseSelections.forEach(selection => {
+        if (selection.courseId && selection.selectedSemesters.length > 0) {
+          course_semesters[selection.courseId] = selection.selectedSemesters;
+        }
+      });
+      
+      // Extract course IDs
       const courseIds = courseSelections
         .filter(selection => selection.courseId !== '')
         .map(selection => selection.courseId);
       
-      // Collect all unique semesters from all course selections
-      const allSemesters = courseSelections
-        .filter(selection => selection.courseId !== '')
-        .flatMap(selection => selection.semesters)
-        .filter((value, index, self) => self.indexOf(value) === index);
+      console.log('Course selections at submission:', courseSelections);
+      console.log('Course IDs being submitted:', courseIds);
+      console.log('Course semesters being submitted:', course_semesters);
       
-      const professorData: Professor = {
+      const professorData: any = {
         ...formData,
         course_ids: courseIds,
-        semesters: allSemesters,
+        course_semesters: course_semesters,
         updated_at: new Date().toISOString()
       };
       
-      onSave(professorData);
+      console.log('Submitting professor data:', professorData);
+      onSave(professorData as Professor);
     }
   };
 
@@ -292,6 +417,22 @@ const ProfessorForm: React.FC<ProfessorFormProps> = ({
             </FormControl>
           </Grid>
           
+          {/* Custom Professor ID field for new professors */}
+          {!professor && (
+            <Grid item xs={12}>
+              <TextField
+                name="professor_id"
+                label="Professor ID (optional)"
+                fullWidth
+                value={formData.professor_id}
+                onChange={handleChange}
+                helperText="Leave blank for auto-generated ID"
+              />
+            </Grid>
+          )}
+          
+          {/* Password field removed */}
+          
           {/* Multiple Course Selection Section with Per-Course Semester Selection */}
           <Grid item xs={12}>
             <Box sx={{ mt: 2 }}>
@@ -361,28 +502,53 @@ const ProfessorForm: React.FC<ProfessorFormProps> = ({
                             <Typography variant="caption" sx={{ mb: 1, display: 'block' }}>
                               Semester Availability:
                             </Typography>
-                            <Box sx={{ display: 'flex', gap: 2 }}>
-                              <FormControlLabel
-                                control={
-                                  <Checkbox
-                                    checked={selection.semesters.includes('Fall')}
-                                    onChange={() => handleSemesterChange(index, 'Fall')}
-                                    size="small"
-                                  />
-                                }
-                                label="Fall"
-                              />
-                              <FormControlLabel
-                                control={
-                                  <Checkbox
-                                    checked={selection.semesters.includes('Spring')}
-                                    onChange={() => handleSemesterChange(index, 'Spring')}
-                                    size="small"
-                                  />
-                                }
-                                label="Spring"
-                              />
-                            </Box>
+                            
+                            {courseSemesterInfo[selection.courseId] ? (
+                              <Box sx={{ display: 'flex', gap: 2, flexDirection: 'column' }}>
+                                {courseSemesterInfo[selection.courseId].availableSemesters.map(semester => {
+                                  // Find if any professors are assigned to this course-semester
+                                  const assignedProf = courseSemesterInfo[selection.courseId].assignedProfessors.find(
+                                    prof => prof.semester === semester && prof.professor_id !== professor?.professor_id
+                                  );
+                                  
+                                  const isDisabled = Boolean(assignedProf);
+                                  const disabledReason = isDisabled ? `Already assigned to ${assignedProf?.professor_name}` : '';
+                                  
+                                  return (
+                                    <Tooltip
+                                      key={semester}
+                                      title={isDisabled ? disabledReason : ''}
+                                      placement="right"
+                                    >
+                                      <FormControlLabel
+                                        control={
+                                          <Checkbox
+                                            checked={selection.selectedSemesters.includes(semester)}
+                                            onChange={() => handleSemesterChange(index, semester)}
+                                            size="small"
+                                            disabled={isDisabled}
+                                          />
+                                        }
+                                        label={
+                                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                            <Typography>{semester}</Typography>
+                                            {isDisabled && (
+                                              <Typography variant="caption" sx={{ ml: 1, color: 'text.secondary' }}>
+                                                (Already assigned)
+                                              </Typography>
+                                            )}
+                                          </Box>
+                                        }
+                                      />
+                                    </Tooltip>
+                                  );
+                                })}
+                              </Box>
+                            ) : (
+                              <Typography variant="body2" color="text.secondary">
+                                Loading available semesters...
+                              </Typography>
+                            )}
                           </Box>
                         )}
                       </Box>
