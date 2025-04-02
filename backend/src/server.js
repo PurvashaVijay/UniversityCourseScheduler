@@ -46,7 +46,7 @@ app.use('/api', require('./routes/scheduledCourseRoutes'));
 // With your other app.use statements
 app.use('/api/auth', tempAuthRoutes);
 app.use('/api/test', testRoutes);
-app.use('/api/auth', tempAuthRoutes);
+//app.use('/api/auth', tempAuthRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

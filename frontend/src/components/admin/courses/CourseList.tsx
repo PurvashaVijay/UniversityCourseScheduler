@@ -36,7 +36,7 @@ const CourseList: React.FC = () => {
   const navigate = useNavigate();
   const [departments, setDepartments] = useState<any[]>([]);
   const [programs, setPrograms] = useState<any[]>([]);
-  const [selectedDepartment, setSelectedDepartment] = useState<string>('');
+  const [selectedDepartment, setSelectedDepartment] = useState<string>('ALL');
   const [selectedProgram, setSelectedProgram] = useState<string>('');
   const [courses, setCourses] = useState<Course[]>([]);
   const [loadingDepartments, setLoadingDepartments] = useState(false);
