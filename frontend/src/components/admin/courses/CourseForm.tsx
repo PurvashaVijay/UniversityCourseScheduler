@@ -21,10 +21,8 @@ import {
   FormControlLabel,
   Switch
 } from '@mui/material';
-//import SaveIcon from '@mui/icons-material/Save';
+import SaveIcon from '@mui/icons-material/Save';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-//import { Link, useNavigate, useParams, useLocation } from 'react-router-dom';
-//import { TextInput, NumberInput } from '../../common/FormComponents';
 import { Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { TextInput, NumberInput } from '../../../components/common/FormComponents';
 import { v4 as uuidv4 } from 'uuid';
@@ -392,51 +390,70 @@ const CourseForm: React.FC = () => {
               />
             </Grid>
             <Grid item xs={12} md={6}>
-            <Typography variant="subtitle2" gutterBottom>
-              Semester
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 2 }}>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={course.semesters.includes('Fall')}
-                    onChange={(e) => {
-                      const { checked } = e.target;
-                      setCourse(prev => ({
-                        ...prev,
-                        semesters: checked 
-                          ? [...prev.semesters, 'Fall'] 
-                          : prev.semesters.filter(sem => sem !== 'Fall')
-                      }));
-                    }}
-                  />
-                }
-                label="Fall"
-              />
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={course.semesters.includes('Spring')}
-                    onChange={(e) => {
-                      const { checked } = e.target;
-                      setCourse(prev => ({
-                        ...prev,
-                        semesters: checked 
-                          ? [...prev.semesters, 'Spring'] 
-                          : prev.semesters.filter(sem => sem !== 'Spring')
-                      }));
-                    }}
-                  />
-                }
-                label="Spring"
-              />
-            </Box>
-            {errors.semesters && (
-            <Typography color="error" variant="caption">
-              {errors.semesters}
-            </Typography>
-          )}
-          </Grid>
+              <Typography variant="subtitle2" gutterBottom>
+                Semester
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={course.semesters.includes('Fall')}
+                      onChange={(e) => {
+                        const { checked } = e.target;
+                        setCourse(prev => ({
+                          ...prev,
+                          semesters: checked 
+                            ? [...prev.semesters, 'Fall'] 
+                            : prev.semesters.filter(sem => sem !== 'Fall')
+                        }));
+                      }}
+                    />
+                  }
+                  label="Fall"
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={course.semesters.includes('Spring')}
+                      onChange={(e) => {
+                        const { checked } = e.target;
+                        setCourse(prev => ({
+                          ...prev,
+                          semesters: checked 
+                            ? [...prev.semesters, 'Spring'] 
+                            : prev.semesters.filter(sem => sem !== 'Spring')
+                        }));
+                      }}
+                    />
+                  }
+                  label="Spring"
+                />
+              </Box>
+              {errors.semesters && (
+                <Typography color="error" variant="caption">
+                  {errors.semesters}
+                </Typography>
+              )}
+            </Grid>
+            <Grid item xs={12} sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+              <Button
+                type="submit"
+                variant="contained"
+                color="primary"
+                startIcon={<SaveIcon />}
+                disabled={saving}
+                sx={{ bgcolor: '#00539F' }}
+              >
+                {saving ? (
+                  <>
+                    <CircularProgress size={24} sx={{ mr: 1, color: 'white' }} />
+                    Saving...
+                  </>
+                ) : (
+                  'Save Course'
+                )}
+              </Button>
+            </Grid>
           </Grid>
         </Box>
       </Paper>
@@ -446,13 +463,13 @@ const CourseForm: React.FC = () => {
         autoHideDuration={6000}
         onClose={() => setSnackbar({ ...snackbar, open: false })}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity}>
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
-    </Box>
-  );
-};
-
-export default CourseForm;
+        >
+          <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity}>
+            {snackbar.message}
+          </Alert>
+        </Snackbar>
+      </Box>
+    );
+  };
+  
+  export default CourseForm;
