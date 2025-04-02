@@ -12,7 +12,11 @@ const Schedule = require('./Schedule');
 const ScheduledCourse = require('./ScheduledCourse');
 const Conflict = require('./Conflict');
 const ConflictCourse = require('./ConflictCourse');
+const CourseSemester = require('./CourseSemester');
+const ProfessorCourse = require('./ProfessorCourse');
 const defineAssociations = require('./associations');
+
+
 
 // Initialize associations
 defineAssociations();
@@ -31,5 +35,7 @@ module.exports = {
   Schedule,
   ScheduledCourse,
   Conflict,
-  ConflictCourse
+  ConflictCourse,
+  CourseSemester,
+  ProfessorCourse // Add this line
 };

@@ -19,69 +19,19 @@ import {
   MenuItem,
   SelectChangeEvent,
   FormControlLabel,
-  Switch
+  Switch,
+  FormGroup,
+  FormLabel
 } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { TextInput, NumberInput } from '../../../components/common/FormComponents';
-import { v4 as uuidv4 } from 'uuid';
 
-// Mock functions for API calls
-const fetchPrograms = async () => {
-  // This would be an API call to get all programs
-  return [
-    { id: 'PROG-001', program_id: 'PROG-001', name: 'Bachelor of Science in Computer Science', department_id: 'DEPT-001' },
-    { id: 'PROG-002', program_id: 'PROG-002', name: 'Master of Science in Computer Science', department_id: 'DEPT-001' },
-    { id: 'PROG-003', program_id: 'PROG-003', name: 'Bachelor of Economics', department_id: 'DEPT-002' },
-    { id: 'PROG-004', program_id: 'PROG-004', name: 'Master of Economics', department_id: 'DEPT-002' },
-    { id: 'PROG-005', program_id: 'PROG-005', name: 'Bachelor of Mathematics', department_id: 'DEPT-003' }
-  ];
-};
-
-const fetchCourse = async (id: string) => {
-  // This would be an API call to get a specific course
-  const coursesMap: { [key: string]: any } = {
-    'COURSE-001': {
-      id: 'COURSE-001',
-      course_id: 'CS101',
-      program_id: 'PROG-001',
-      name: 'Introduction to Programming',
-      description: 'Basic programming concepts',
-      duration_minutes: 55,
-      is_core: true,
-      semesters: ['Fall'] // Add semester
-    },
-    'COURSE-002': {
-      id: 'COURSE-002',
-      course_id: 'CS201',
-      program_id: 'PROG-001',
-      name: 'Data Structures',
-      description: 'Advanced data structures',
-      duration_minutes: 55,
-      is_core: true,
-      semester: 'Spring' // Add semester
-    },
-    'COURSE-005': {
-      id: 'COURSE-005',
-      course_id: 'CS501',
-      program_id: 'PROG-002',
-      name: 'Advanced Algorithms',
-      description: 'Complex algorithms and optimization',
-      duration_minutes: 80,
-      is_core: true,
-      semesters: ['Spring'] // Add semester
-    }
-  };
-  
-  return coursesMap[id] || null;
-};
-
-const saveCourse = async (course: any) => {
-  console.log('Saving course:', course);
-  // This would be an API call to save the course
-  return { success: true, course };
-};
+// Import services
+import departmentService from '../../../services/departmentService';
+import programService from '../../../services/programService';
+import courseService, { Course } from '../../../services/courseService';
 
 const CourseForm: React.FC = () => {
   const navigate = useNavigate();
@@ -94,14 +44,25 @@ const CourseForm: React.FC = () => {
   const initialProgramId = queryParams.get('programId') || '';
   
   const [programs, setPrograms] = useState<any[]>([]);
-  const [course, setCourse] = useState({
+  const [selectedSemesters, setSelectedSemesters] = useState<string[]>([]);
+  const [course, setCourse] = useState<{
+    course_id: string;
+    program_id: string;
+    department_id: string;
+    name: string;
+    description: string;
+    duration_minutes: number | '';
+    is_core: boolean;
+    semesters: string[];
+  }>({
     course_id: '',
     program_id: initialProgramId,
+    department_id: '',
     name: '',
     description: '',
-    duration_minutes: 55 as number | '',
+    duration_minutes: 55,
     is_core: false,
-    semesters: [] as string[]
+    semesters: []
   });
   
   const [loading, setLoading] = useState(isEditing);
@@ -112,8 +73,19 @@ const CourseForm: React.FC = () => {
   useEffect(() => {
     const loadPrograms = async () => {
       try {
-        const data = await fetchPrograms();
+        const data = await programService.getAllPrograms();
         setPrograms(data);
+        
+        // If we have programs and an initialProgramId, set the department_id
+        if (data.length > 0 && initialProgramId) {
+          const selectedProgram = data.find(p => p.program_id === initialProgramId);
+          if (selectedProgram) {
+            setCourse(prevCourse => ({
+              ...prevCourse,
+              department_id: selectedProgram.department_id
+            }));
+          }
+        }
       } catch (error) {
         console.error('Error loading programs:', error);
         setSnackbar({
@@ -126,12 +98,34 @@ const CourseForm: React.FC = () => {
 
     loadPrograms();
     
-    if (isEditing) {
+    if (isEditing && id) {
       const loadCourse = async () => {
         try {
-          const data = await fetchCourse(id!);
+          console.log(`Loading course with ID: ${id}`);
+          const data = await courseService.getCourseById(id);
+          
           if (data) {
-            setCourse(data);
+            // Log the received data for debugging
+            console.log('Loaded course data:', data);
+            
+            // Ensure semesters are always handled as an array
+            const loadedSemesters = Array.isArray(data.semesters) ? data.semesters : 
+                                  (data.semesters ? [data.semesters] : []);
+            
+            // Set semester checkboxes
+            setSelectedSemesters(loadedSemesters);
+            
+            // Ensure all required fields are set
+            setCourse({
+              course_id: data.course_id || '',
+              program_id: data.program_id || (data.programs && data.programs.length > 0 ? data.programs[0].program_id : ''),
+              department_id: data.department_id || '',
+              name: data.course_name || data.name || '',
+              description: data.description || '',
+              duration_minutes: typeof data.duration_minutes === 'number' ? data.duration_minutes : 55,
+              is_core: Boolean(data.is_core),
+              semesters: loadedSemesters  // Set the semesters here too
+            });
           } else {
             setSnackbar({
               open: true,
@@ -151,16 +145,26 @@ const CourseForm: React.FC = () => {
           setLoading(false);
         }
       };
-
+      
       loadCourse();
     } else {
-      // For new courses, generate a unique ID if not editing
+      // For new courses, set an empty course_id instead of generating one
       setCourse(prevCourse => ({
         ...prevCourse,
-        course_id: `COURSE-${uuidv4().substring(0, 6)}`
+        course_id: '', // Leave empty for user input
+        program_id: initialProgramId || ''
       }));
+      setLoading(false);
     }
   }, [id, isEditing, navigate, initialProgramId]);
+
+  // Update course.semesters when selectedSemesters changes
+  useEffect(() => {
+    setCourse(prev => ({
+      ...prev,
+      semesters: selectedSemesters
+    }));
+  }, [selectedSemesters]);
 
   const validateForm = () => {
     const newErrors: {[key: string]: string} = {};
@@ -177,6 +181,10 @@ const CourseForm: React.FC = () => {
       newErrors.program_id = 'Program is required';
     }
     
+    if (!course.department_id) {
+      newErrors.department_id = 'Department ID is required (should be set automatically)';
+    }
+    
     if (course.duration_minutes === '') {
       newErrors.duration_minutes = 'Duration is required';
     } else if (typeof course.duration_minutes === 'number' && course.duration_minutes <= 0) {
@@ -186,8 +194,20 @@ const CourseForm: React.FC = () => {
     if (course.semesters.length === 0) {
       newErrors.semesters = 'At least one semester must be selected';
     }
+    
+    console.log('Validation errors:', newErrors);
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSemesterChange = (semester: string) => {
+    setSelectedSemesters(prev => {
+      if (prev.includes(semester)) {
+        return prev.filter(s => s !== semester);
+      } else {
+        return [...prev, semester];
+      }
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -196,23 +216,39 @@ const CourseForm: React.FC = () => {
     if (!validateForm()) {
       return;
     }
-    
+  
     try {
       setSaving(true);
-      const result = await saveCourse(course);
       
-      if (result.success) {
-        setSnackbar({
-          open: true,
-          message: `Course ${isEditing ? 'updated' : 'created'} successfully`,
-          severity: 'success'
-        });
-        
-        // Navigate back after a brief delay
-        setTimeout(() => {
-          navigate('/admin/courses');
-        }, 1500);
+      // Log what we're about to send for debugging
+      console.log('About to submit course data:', course);
+    
+      // Create a properly typed object for the API
+      const courseData = {
+        ...course,
+        semesters: selectedSemesters,
+        course_name: course.name, // Ensure course_name is set for backend compatibility
+        duration_minutes: Number(course.duration_minutes) // Force conversion to number
+      };
+
+      console.log('Submitting course data:', courseData);
+    
+      if (isEditing) {
+        await courseService.updateCourse(id!, courseData);
+      } else {
+        await courseService.createCourse(courseData);
       }
+    
+      setSnackbar({
+        open: true,
+        message: `Course ${isEditing ? 'updated' : 'created'} successfully`,
+        severity: 'success'
+      });
+    
+      // Navigate back after a brief delay
+      setTimeout(() => {
+        navigate('/admin/courses');
+      }, 1500);
     } catch (error) {
       console.error('Error saving course:', error);
       setSnackbar({
@@ -242,9 +278,15 @@ const CourseForm: React.FC = () => {
 
   const handleProgramChange = (event: SelectChangeEvent) => {
     const newProgramId = event.target.value;
+    
+    // Find the selected program to get its department_id
+    const selectedProgram = programs.find(p => p.program_id === newProgramId);
+    const departmentId = selectedProgram ? selectedProgram.department_id : '';
+    
     setCourse({
       ...course,
-      program_id: newProgramId
+      program_id: newProgramId,
+      department_id: departmentId // Add the department_id
     });
     
     // Clear any program_id error
@@ -390,45 +432,29 @@ const CourseForm: React.FC = () => {
               />
             </Grid>
             <Grid item xs={12} md={6}>
-              <Typography variant="subtitle2" gutterBottom>
-                Semester
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 2 }}>
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={course.semesters.includes('Fall')}
-                      onChange={(e) => {
-                        const { checked } = e.target;
-                        setCourse(prev => ({
-                          ...prev,
-                          semesters: checked 
-                            ? [...prev.semesters, 'Fall'] 
-                            : prev.semesters.filter(sem => sem !== 'Fall')
-                        }));
-                      }}
-                    />
-                  }
-                  label="Fall"
-                />
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={course.semesters.includes('Spring')}
-                      onChange={(e) => {
-                        const { checked } = e.target;
-                        setCourse(prev => ({
-                          ...prev,
-                          semesters: checked 
-                            ? [...prev.semesters, 'Spring'] 
-                            : prev.semesters.filter(sem => sem !== 'Spring')
-                        }));
-                      }}
-                    />
-                  }
-                  label="Spring"
-                />
-              </Box>
+              <FormControl component="fieldset" sx={{ mt: 2, mb: 2 }}>
+                <FormLabel component="legend">Semester</FormLabel>
+                <FormGroup row>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={selectedSemesters.includes('Fall')}
+                        onChange={() => handleSemesterChange('Fall')}
+                      />
+                    }
+                    label="Fall"
+                  />
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={selectedSemesters.includes('Spring')}
+                        onChange={() => handleSemesterChange('Spring')}
+                      />
+                    }
+                    label="Spring"
+                  />
+                </FormGroup>
+              </FormControl>
               {errors.semesters && (
                 <Typography color="error" variant="caption">
                   {errors.semesters}
@@ -463,13 +489,13 @@ const CourseForm: React.FC = () => {
         autoHideDuration={6000}
         onClose={() => setSnackbar({ ...snackbar, open: false })}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-        >
-          <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity}>
-            {snackbar.message}
-          </Alert>
-        </Snackbar>
-      </Box>
-    );
-  };
-  
-  export default CourseForm;
+      >
+        <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+    </Box>
+  );
+};
+
+export default CourseForm;

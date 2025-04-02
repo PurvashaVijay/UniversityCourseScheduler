@@ -24,68 +24,13 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import SearchIcon from '@mui/icons-material/Search';
 import { useNavigate } from 'react-router-dom';
-//import DataTable from '../../common/DataTable';
-//import ConfirmDialog from '../../common/ConfirmDialog';
 import DataTable from '../../../components/common/DataTable';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 
-
-// Mock data functions (replace with actual API calls later)
-const fetchDepartments = async () => {
-  // This would be an API call to get all departments
-  return [
-    { id: 'DEPT-001', department_id: 'DEPT-001', name: 'Computer Science', description: 'CS Department' },
-    { id: 'DEPT-002', department_id: 'DEPT-002', name: 'Economics', description: 'Economics Department' },
-    { id: 'DEPT-003', department_id: 'DEPT-003', name: 'Mathematics', description: 'Mathematics Department' },
-  ];
-};
-
-const fetchProgramsByDepartment = async (departmentId: string) => {
-  // This would be an API call to get programs for a specific department
-  const programsMap: { [key: string]: any[] } = {
-    'DEPT-001': [
-      { id: 'PROG-001', program_id: 'PROG-001', name: 'Bachelor of Science in Computer Science', department_id: 'DEPT-001' },
-      { id: 'PROG-002', program_id: 'PROG-002', name: 'Master of Science in Computer Science', department_id: 'DEPT-001' }
-    ],
-    'DEPT-002': [
-      { id: 'PROG-003', program_id: 'PROG-003', name: 'Bachelor of Economics', department_id: 'DEPT-002' },
-      { id: 'PROG-004', program_id: 'PROG-004', name: 'Master of Economics', department_id: 'DEPT-002' }
-    ],
-    'DEPT-003': [
-      { id: 'PROG-005', program_id: 'PROG-005', name: 'Bachelor of Mathematics', department_id: 'DEPT-003' }
-    ]
-  };
-  
-  return programsMap[departmentId] || [];
-};
-
-const fetchCourses = async (programId: string) => {
-  // This would be an API call to get courses for a specific program
-  const coursesMap: { [key: string]: any[] } = {
-    'PROG-001': [
-      { id: 'COURSE-001', course_id: 'CS101', program_id: 'PROG-001', name: 'Introduction to Programming', duration_minutes: 55, is_core: true, semesters: ['Fall','Spring'] },
-      { id: 'COURSE-002', course_id: 'CS201', program_id: 'PROG-001', name: 'Data Structures', duration_minutes: 55, is_core: true, semesters: ['Fall'] },
-      { id: 'COURSE-003', course_id: 'CS301', program_id: 'PROG-001', name: 'Algorithms', duration_minutes: 80, is_core: true, semesters: ['Spring'] },
-      { id: 'COURSE-004', course_id: 'CS401', program_id: 'PROG-001', name: 'Web Development', duration_minutes: 80, is_core: false, semesters: ['Spring'] }
-    ],
-    'PROG-002': [
-      { id: 'COURSE-005', course_id: 'CS501', program_id: 'PROG-002', name: 'Advanced Algorithms', duration_minutes: 80, is_core: true, semesters: ['Spring'] },
-      { id: 'COURSE-006', course_id: 'CS601', program_id: 'PROG-002', name: 'Machine Learning', duration_minutes: 80, is_core: true, semesters: ['Spring'] },
-      { id: 'COURSE-007', course_id: 'CS701', program_id: 'PROG-002', name: 'Big Data Analytics', duration_minutes: 180, is_core: false, semesters: ['Fall']}
-    ],
-    'PROG-003': [
-      { id: 'COURSE-008', course_id: 'ECON101', program_id: 'PROG-003', name: 'Principles of Economics', duration_minutes: 55, is_core: true, semesters: ['Fall'] },
-      { id: 'COURSE-009', course_id: 'ECON201', program_id: 'PROG-003', name: 'Microeconomics', duration_minutes: 55, is_core: true, semesters: ['Fall']}
-    ]
-  };
-  
-  return coursesMap[programId] || [];
-};
-
-const deleteCourses = async (ids: string[]) => {
-  console.log('Deleting courses:', ids);
-  return { success: true, message: 'Courses deleted successfully' };
-};
+// Import real API services
+import departmentService from '../../../services/departmentService';
+import programService from '../../../services/programService';
+import courseService, { Course } from '../../../services/courseService';
 
 const CourseList: React.FC = () => {
   const navigate = useNavigate();
@@ -93,10 +38,11 @@ const CourseList: React.FC = () => {
   const [programs, setPrograms] = useState<any[]>([]);
   const [selectedDepartment, setSelectedDepartment] = useState<string>('ALL');
   const [selectedProgram, setSelectedProgram] = useState<string>('');
-  const [courses, setCourses] = useState<any[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
   const [loadingDepartments, setLoadingDepartments] = useState(false);
   const [loadingPrograms, setLoadingPrograms] = useState(false);
   const [loadingCourses, setLoadingCourses] = useState(false);
+  const [deletingCourses, setDeletingCourses] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showCoreOnly, setShowCoreOnly] = useState(false);
   const [selectedSemesters, setSelectedSemesters] = useState<string[]>(['Fall', 'Spring']);
@@ -107,25 +53,28 @@ const CourseList: React.FC = () => {
   const columns = [
     { id: 'course_id', label: 'Course ID', minWidth: 100 },
     { id: 'program_id', label: 'Program ID', minWidth: 100 },
-    { id: 'name', label: 'Name', minWidth: 170 },
+    { id: 'course_name', label: 'Name', minWidth: 170 },
     { 
       id: 'duration_minutes', 
       label: 'Duration (min)', 
       minWidth: 120,
       align: 'right' as const,
-      format: (value: number) => value.toString()
+      format: (value: number | undefined) => value?.toString() || '0'
     },
     { 
       id: 'is_core', 
       label: 'Core Course', 
       minWidth: 120,
-      format: (value: boolean) => value ? 'Core' : 'Elective'
+      format: (value: boolean | undefined) => value ? 'Core' : 'Elective'
     },
     {
-      id: 'semesters',  
-      label: 'Semesters',  
+      id: 'semesters',
+      label: 'Semesters',
       minWidth: 120,
-      format: (value: string[]) => Array.isArray(value) ? value.join(', ') : value  // Handle both array and string formats
+      format: (value: string[] | string | undefined | null) => {
+        if (!value) return '';
+        return Array.isArray(value) ? value.join(', ') : String(value);
+      }
     },
   ];  
 
@@ -134,7 +83,7 @@ const CourseList: React.FC = () => {
     const loadDepartments = async () => {
       try {
         setLoadingDepartments(true);
-        const data = await fetchDepartments();
+        const data = await departmentService.getAllDepartments();
         setDepartments(data);
       } catch (error) {
         console.error('Error loading departments:', error);
@@ -161,7 +110,7 @@ const CourseList: React.FC = () => {
           setSelectedProgram('');
           setCourses([]);
           
-          const data = await fetchProgramsByDepartment(selectedDepartment);
+          const data = await programService.getProgramsByDepartment(selectedDepartment);
           setPrograms(data);
         } catch (error) {
           console.error('Error loading programs:', error);
@@ -192,11 +141,43 @@ const CourseList: React.FC = () => {
     }
   }, [selectedProgram]);
 
+  // Updated loadCourses function using direct fetch
   const loadCourses = async (programId: string) => {
     try {
       setLoadingCourses(true);
-      const data = await fetchCourses(programId);
-      setCourses(data);
+      console.log('Loading courses for program:', programId);
+      
+      const token = localStorage.getItem('token');
+      // Direct fetch to bypass service layer temporarily
+      const response = await fetch(`http://localhost:3000/api/courses/program/${programId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch courses: ${response.status}`);
+      }
+
+      const rawData = await response.json();
+      console.log('Raw API response:', rawData);
+      
+      // Simple transformation to ensure consistent data structure
+      const processedCourses = rawData.map((course: any) => ({
+        course_id: course.course_id,
+        program_id: programId,
+        course_name: course.course_name || '',
+        name: course.course_name || '',
+        department_id: course.department_id || '',
+        duration_minutes: course.duration_minutes || 0,
+        is_core: Boolean(course.is_core),
+        // Handle semesters with fallbacks
+        semesters: Array.isArray(course.semesters) ? course.semesters : []
+      }));
+      
+      console.log('Processed courses:', processedCourses);
+      setCourses(processedCourses);
     } catch (error) {
       console.error('Error loading courses:', error);
       setSnackbar({
@@ -204,6 +185,7 @@ const CourseList: React.FC = () => {
         message: 'Failed to load courses',
         severity: 'error'
       });
+      setCourses([]);
     } finally {
       setLoadingCourses(false);
     }
@@ -235,23 +217,28 @@ const CourseList: React.FC = () => {
 
   const handleDeleteClick = (ids: string | string[]) => {
     const idsArray = Array.isArray(ids) ? ids : [ids];
+    console.log('Delete clicked for courses:', idsArray);
     setCoursesToDelete(idsArray);
     setDeleteDialogOpen(true);
   };
 
   const handleDeleteConfirm = async () => {
     try {
-      const result = await deleteCourses(coursesToDelete);
+      setDeletingCourses(true);
+      console.log(`CourseList: Deleting courses: ${coursesToDelete.join(', ')}`);
+      
+      // Call the courseService.deleteCourses method
+      const result = await courseService.deleteCourses(coursesToDelete);
       
       if (result.success) {
         // Remove deleted courses from state
-        setCourses(courses.filter(
-          course => !coursesToDelete.includes(course.id)
-        ));
+        setCourses(prevCourses => 
+          prevCourses.filter(course => !coursesToDelete.includes(course.course_id))
+        );
         
         setSnackbar({
           open: true,
-          message: result.message,
+          message: result.message || 'Courses deleted successfully',
           severity: 'success'
         });
       } else {
@@ -271,6 +258,7 @@ const CourseList: React.FC = () => {
     } finally {
       setDeleteDialogOpen(false);
       setCoursesToDelete([]);
+      setDeletingCourses(false);
     }
   };
 
@@ -279,63 +267,79 @@ const CourseList: React.FC = () => {
   };
 
   // Filter courses based on Semester checkbox 
-const SemesterFilter: React.FC<{
-  selectedSemesters: string[];
-  onChange: (semesters: string[]) => void;
-}> = ({ selectedSemesters, onChange }) => {
-  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const { value, checked } = event.target;
-    
-    if (checked) {
-      onChange([...selectedSemesters, value]);
-    } else {
-      onChange(selectedSemesters.filter(semester => semester !== value));
-    }
+  const SemesterFilter: React.FC<{
+    selectedSemesters: string[];
+    onChange: (semesters: string[]) => void;
+  }> = ({ selectedSemesters, onChange }) => {
+    const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+      const { value, checked } = event.target;
+      
+      if (checked) {
+        onChange([...selectedSemesters, value]);
+      } else {
+        onChange(selectedSemesters.filter(semester => semester !== value));
+      }
+    };
+
+    return (
+      <Box sx={{ mb: 2 }}>
+        <Typography variant="subtitle2" gutterBottom>
+          Semester
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <FormControlLabel
+            control={
+              <Checkbox 
+                checked={selectedSemesters.includes('Fall')}
+                onChange={handleChange}
+                value="Fall"
+              />
+            }
+            label="Fall"
+          />
+          <FormControlLabel
+            control={
+              <Checkbox 
+                checked={selectedSemesters.includes('Spring')}
+                onChange={handleChange}
+                value="Spring"
+              />
+            }
+            label="Spring"
+          />
+        </Box>
+      </Box>
+    );
   };
 
-  return (
-    <Box sx={{ mb: 2 }}>
-      <Typography variant="subtitle2" gutterBottom>
-        Semester
-      </Typography>
-      <Box sx={{ display: 'flex', gap: 2 }}>
-        <FormControlLabel
-          control={
-            <Checkbox 
-              checked={selectedSemesters.includes('Fall')}
-              onChange={handleChange}
-              value="Fall"
-            />
-          }
-          label="Fall"
-        />
-        <FormControlLabel
-          control={
-            <Checkbox 
-              checked={selectedSemesters.includes('Spring')}
-              onChange={handleChange}
-              value="Spring"
-            />
-          }
-          label="Spring"
-        />
-      </Box>
-    </Box>
-  );
-};
+  // Simplified filtering logic
+  const filteredCourses = courses.filter(course => {
+    // Search filtering
+    const searchMatch = !searchTerm || 
+      course.course_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      course.course_name?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    // Core course filtering
+    const coreMatch = !showCoreOnly || course.is_core;
+    
+    // Semester filtering - temporarily simplified
+    const semesterMatch = selectedSemesters.length === 0 || 
+      (course.semesters && course.semesters.some(sem => 
+        selectedSemesters.includes(sem)
+      ));
+    
+    console.log(
+      `Course ${course.course_id} - search: ${searchMatch}, core: ${coreMatch}, semester: ${semesterMatch}`,
+      `Semesters: ${JSON.stringify(course.semesters)}`
+    );
+    
+    return searchMatch && coreMatch && semesterMatch;
+  });
 
-  // Filter courses based on search term and core filter
-  const filteredCourses = courses.filter(course => 
-    (course.course_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    course.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    course.description.toLowerCase().includes(searchTerm.toLowerCase())) &&
-    (!showCoreOnly || course.is_core)&&
-    (selectedSemesters.length === 0 || 
-      (selectedSemesters.length === 0 || 
-        (Array.isArray(course.semesters)
-          ? course.semesters.some((sem: string) => selectedSemesters.includes(sem))
-          : selectedSemesters.includes(course.semester))))
-  );
+  // Debug logging
+  console.log('Selected semesters:', selectedSemesters);
+  console.log('Total courses:', courses.length);
+  console.log('Filtered courses:', filteredCourses.length);
 
   return (
     <Box>
@@ -404,13 +408,12 @@ const SemesterFilter: React.FC<{
         </Grid>
 
         <Grid item xs={12} md={6}>
-        <SemesterFilter 
-        selectedSemesters={selectedSemesters}
-        onChange={setSelectedSemesters}
+          <SemesterFilter 
+            selectedSemesters={selectedSemesters}
+            onChange={setSelectedSemesters}
           />
         </Grid>
     
-
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <TextField
             variant="outlined"

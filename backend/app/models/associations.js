@@ -4,6 +4,7 @@ const Admin = require('./Admin');
 const Professor = require('./Professor');
 const Course = require('./Course');
 const CourseProgram = require('./CourseProgram');
+const CourseSemester = require('./CourseSemester');
 const CoursePrerequisite = require('./CoursePrerequisite');
 const TimeSlot = require('./TimeSlot');
 const ProfessorAvailability = require('./ProfessorAvailability');
@@ -12,6 +13,8 @@ const Schedule = require('./Schedule');
 const ScheduledCourse = require('./ScheduledCourse');
 const Conflict = require('./Conflict');
 const ConflictCourse = require('./ConflictCourse');
+// Add this line to your associations.js after importing ProfessorCourse
+const ProfessorCourse = require('./ProfessorCourse');
 
 function defineAssociations() {
   // Department associations
@@ -32,9 +35,25 @@ function defineAssociations() {
   Professor.hasMany(ProfessorAvailability, { foreignKey: 'professor_id' });
   Professor.hasMany(ScheduledCourse, { foreignKey: 'professor_id' });
 
+  // Add these direct associations
+  ProfessorCourse.belongsTo(Professor, { foreignKey: 'professor_id' });
+  Professor.hasMany(ProfessorCourse, { foreignKey: 'professor_id' });
+
+  ProfessorCourse.belongsTo(Course, { foreignKey: 'course_id' });
+  Course.hasMany(ProfessorCourse, { foreignKey: 'course_id' });
+
   // Course associations
   Course.belongsTo(Department, { foreignKey: 'department_id' });
   Course.belongsToMany(Program, { through: CourseProgram, foreignKey: 'course_id', otherKey: 'program_id' });
+
+  // Course and CourseSemester associations
+  Course.hasMany(CourseSemester, { 
+    foreignKey: 'course_id',
+    onDelete: 'CASCADE'
+  });
+  CourseSemester.belongsTo(Course, { 
+    foreignKey: 'course_id'
+  });
   
   // Course Prerequisites (self-referencing)
   Course.belongsToMany(Course, { 
@@ -83,6 +102,11 @@ function defineAssociations() {
   // ConflictCourse associations
   ConflictCourse.belongsTo(Conflict, { foreignKey: 'conflict_id' });
   ConflictCourse.belongsTo(ScheduledCourse, { foreignKey: 'scheduled_course_id' });
+
+  // Add these associations
+  Professor.belongsToMany(Course, { through: ProfessorCourse, foreignKey: 'professor_id', otherKey: 'course_id' });
+  Course.belongsToMany(Professor, { through: ProfessorCourse, foreignKey: 'course_id', otherKey: 'professor_id' });
+
 }
 
 module.exports = defineAssociations;

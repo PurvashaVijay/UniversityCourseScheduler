@@ -1,6 +1,4 @@
 // src/components/common/DataTable.tsx
-
-
 import React, { useState } from 'react';
 import { 
   Box, 
@@ -26,16 +24,10 @@ import EditIcon from '@mui/icons-material/Edit';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import SearchIcon from '@mui/icons-material/Search';
 import { visuallyHidden } from '@mui/utils';
-/*
+
 function getRowId(row: any): string {
-  // Try common ID field names, prioritizing the ones your data uses
-  return row.department_id || row.id || row.professor_id || row.course_id || row.program_id;
-}
-*/
-function getRowId(row: any): string {
-  // Try common ID field names, prioritizing the ones your data uses
-  // Be page-specific about the primary ID to use
-  return row.program_id || row.course_id || row.professor_id || row.id || row.department_id;
+  // Prioritize course_id first
+  return row.course_id || row.program_id || row.professor_id || row.department_id || row.id;
 }
 
 interface Column {
@@ -66,14 +58,30 @@ function getComparator(
 }
 
 function descendingComparator(a: any, b: any, orderBy: string) {
-  if (b[orderBy] < a[orderBy]) {
+  // Handle the case where the field might be named differently
+  const aValue = a[orderBy] || (orderBy === 'name' ? a.course_name : null);
+  const bValue = b[orderBy] || (orderBy === 'name' ? b.course_name : null);
+  
+  if (bValue < aValue) {
     return -1;
   }
-  if (b[orderBy] > a[orderBy]) {
+  if (bValue > aValue) {
     return 1;
   }
   return 0;
 }
+
+// Function to get the display value, handling field name differences
+const getDisplayValue = (row: any, column: Column) => {
+  // For courses that might have name or course_name
+  if (column.id === 'name' && !row.name && row.course_name) {
+    return column.format ? column.format(row.course_name) : row.course_name;
+  }
+  
+  // For normal fields
+  const value = row[column.id];
+  return column.format ? column.format(value) : value;
+};
 
 const DataTable: React.FC<DataTableProps> = ({
   columns,
@@ -105,20 +113,10 @@ const DataTable: React.FC<DataTableProps> = ({
     setOrder(isAsc ? 'desc' : 'asc');
     setOrderBy(property);
   };
-  /*
-  const handleSelectAllClick = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.checked) {
-      const newSelected = data.map((n) => n.id);
-      setSelected(newSelected);
-      return;
-    }
-    setSelected([]);
-  };
-  */
 
   const handleSelectAllClick = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.checked) {
-      const newSelected = data.map((n) => getRowId(n));  // <-- Changed from n.id to getRowId(n)
+      const newSelected = data.map((n) => getRowId(n));
       setSelected(newSelected);
       return;
     }
@@ -153,6 +151,9 @@ const DataTable: React.FC<DataTableProps> = ({
   const isSelected = (id: string) => selected.indexOf(id) !== -1;
 
   const filteredData = data.filter((row) => {
+    // Consider both name and course_name when filtering
+    const rowName = row.name || row.course_name || '';
+    
     return Object.values(row).some(
       (value) => 
         value && 
@@ -305,10 +306,9 @@ const DataTable: React.FC<DataTableProps> = ({
                       </TableCell>
                     )}
                     {columns.map((column) => {
-                      const value = row[column.id];
                       return (
                         <TableCell key={column.id} align={column.align}>
-                          {column.format ? column.format(value) : value}
+                          {getDisplayValue(row, column)}
                         </TableCell>
                       );
                     })}

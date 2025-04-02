@@ -5,26 +5,24 @@ const { authenticate, authorize } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
-// Main course routes
-//router.get('/', courseController.getAllCourses);
-//router.get('/:id', courseController.getCourseById);
-
 // Main course routes - read operations accessible to all authenticated users
 router.get('/', authenticate, courseController.getAllCourses);
 router.get('/:id', authenticate, courseController.getCourseById);
-
-//router.post('/', courseController.createCourse);
-//router.put('/:id', courseController.updateCourse);
-//router.delete('/:id', courseController.deleteCourse);
+// New route for getting course with semesters
+router.get('/:id/with-semesters', authenticate, courseController.getCourseWithSemesters);
+// Add this new route for getting course-professor assignments
+router.get('/:id/professors', authenticate, courseController.getCourseProfessorAssignments);
 
 // Write operations restricted to admin
 router.post('/', authenticate, authorize('admin'), courseController.createCourse);
 router.put('/:id', authenticate, authorize('admin'), courseController.updateCourse);
 router.delete('/:id', authenticate, authorize('admin'), courseController.deleteCourse);
 
-// Additional routes for filtering
-//router.get('/department/:departmentId', courseController.getCoursesByDepartment);
-//router.get('/program/:programId', courseController.getCoursesByProgram);
+// Batch delete route
+router.post('/batch-delete', authenticate, authorize('admin'), courseController.deleteCourses);
+
+// Debugging route
+router.get('/debug/:programId', authenticate, courseController.debugCourses);
 
 // Additional routes for filtering
 router.get('/department/:departmentId', authenticate, courseController.getCoursesByDepartment);
