@@ -4,20 +4,23 @@
 export interface Course {
   course_id: string;
   program_id?: string;  // Make optional to handle different backend responses
-  department_id?: string; // Make optional
+  department_id: string; // Required field
   name?: string; 
-  course_name?: string; // For backend compatibility
+  course_name: string; // For backend compatibility
   description?: string;
   duration_minutes: number;
   is_core: boolean;
   semesters?: string[];  // Optional array of semesters
   semester?: string;     // Optional single semester
-  created_at?: string;
-  updated_at?: string;
+  created_at: string;
+  updated_at: string;
   program?: any;
   programs?: any[];      // For courses with multiple programs
   prerequisites?: any[];
   Department?: any;      // For Department association
+  professor_course?: {   // Add professor_course property
+    semester: string;
+  };
 }
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
@@ -67,7 +70,13 @@ export const getCoursesByProgram = async (programId: string): Promise<Course[]> 
       is_core: Boolean(course.is_core),
       // Ensure semesters is always an array
       semesters: Array.isArray(course.semesters) ? course.semesters : 
-               (course.semesters ? [course.semesters] : [])
+               (course.semesters ? [course.semesters] : []),
+      created_at: course.created_at || '',
+      updated_at: course.updated_at || '',
+      // Include professor_course if available
+      professor_course: course.professor_course,
+      // Include semester if available
+      semester: course.semester
     }));
     
     console.log(`Normalized ${normalizedCourses.length} courses for program ${programId}`);
@@ -326,7 +335,13 @@ export const getCourseById = async (id: string): Promise<Course | null> => {
                (data.semesters ? [data.semesters] : []),
       prerequisites: data.prerequisites || [],
       description: data.description || '',
-      Department: data.Department || null
+      Department: data.Department || null,
+      created_at: data.created_at || '',
+      updated_at: data.updated_at || '',
+      // Include professor_course if available
+      professor_course: data.professor_course,
+      // Include semester if available
+      semester: data.semester
     };
   } catch (error) {
     console.error(`Error fetching course ${id}:`, error);

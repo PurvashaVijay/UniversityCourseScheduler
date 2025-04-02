@@ -25,7 +25,8 @@ import {
   TableHead,
   TableRow,
   Chip,
-  Tooltip
+  Tooltip,
+  Alert
 } from '@mui/material';
 import professorService, { Professor, ProfessorAvailability } from '../../../services/professorService';
 import departmentService, { Department } from '../../../services/departmentService';
@@ -75,37 +76,50 @@ const ProfessorDetails: React.FC = () => {
       
       try {
         setLoading(true);
+        console.log('Fetching professor details for ID:', id);
         
         // Fetch professor details
         const professorData = await professorService.getProfessorById(id);
+        console.log('Professor data received:', professorData);
         setProfessor(professorData);
         
-        // Fetch department details
-        const departmentData = await departmentService.getDepartmentById(professorData.department_id);
-        setDepartment(departmentData);
+        // Department data should already be included in the professor details
+        if (professorData.department) {
+          setDepartment(professorData.department);
+        } else if (professorData.department_id) {
+          try {
+            const departmentData = await departmentService.getDepartmentById(professorData.department_id);
+            setDepartment(departmentData);
+          } catch (deptErr) {
+            console.error('Error fetching department:', deptErr);
+          }
+        }
         
-        // Fetch all courses for this department
-        const allCoursesData = await courseService.getAllCourses();
-        
-        // Filter courses assigned to this professor
-        if (professorData.course_ids && professorData.course_ids.length > 0) {
-          const professorCourses = allCoursesData.filter(
-            course => professorData.course_ids?.includes(course.course_id)
-          );
-          setAssignedCourses(professorCourses);
+        // Set assigned courses directly from the response
+        if (professorData.courses && professorData.courses.length > 0) {
+          console.log('Courses data found:', professorData.courses);
+          setAssignedCourses(professorData.courses);
+        } else {
+          console.log('No courses data in response');
+          setAssignedCourses([]);
         }
         
         // Fetch professor availability
-        const availabilityData = await professorService.getProfessorAvailability(id);
-        setAvailabilities(availabilityData);
+        try {
+          const availabilityData = await professorService.getProfessorAvailability(id);
+          setAvailabilities(availabilityData);
+        } catch (availErr) {
+          console.error('Error fetching availability:', availErr);
+        }
         
       } catch (err) {
+        console.error('Error fetching professor details:', err);
         setError('Failed to fetch professor details');
-        console.error(err);
       } finally {
         setLoading(false);
       }
     };
+    
     fetchData();
   }, [id]);
 
@@ -139,7 +153,7 @@ const ProfessorDetails: React.FC = () => {
             title={`${course.course_id} - ${course.is_core ? 'Core' : 'Elective'} - ${course.duration_minutes} mins`}
           >
             <Chip
-              label={course.course_name}
+              label={course.course_name || course.course_id}
               color={course.is_core ? "primary" : "default"}
               size="medium"
               sx={{ fontWeight: course.is_core ? 'medium' : 'normal' }}
@@ -161,7 +175,7 @@ const ProfessorDetails: React.FC = () => {
   if (error || !professor) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
-        <Typography color="error">{error || 'Professor not found'}</Typography>
+        <Alert severity="error">{error || 'Professor not found'}</Alert>
       </Box>
     );
   }
@@ -333,7 +347,15 @@ const ProfessorDetails: React.FC = () => {
                                   color={course.semester === 'Fall' ? 'warning' : 'success'}
                                   size="small"
                                 />
-                              ) : 'Not specified'}
+                              ) : course.professor_course?.semester ? (
+                                <Chip
+                                  label={course.professor_course.semester}
+                                  color={course.professor_course.semester === 'Fall' ? 'warning' : 'success'}
+                                  size="small"
+                                />
+                              ) : (
+                                'Not specified'
+                              )}
                             </TableCell>
                           </TableRow>
                         ))}

@@ -13,7 +13,9 @@ const ScheduledCourse = require('./ScheduledCourse');
 const Conflict = require('./Conflict');
 const ConflictCourse = require('./ConflictCourse');
 const CourseSemester = require('./CourseSemester');
+const ProfessorCourse = require('./ProfessorCourse');
 const defineAssociations = require('./associations');
+
 
 
 // Initialize associations
@@ -34,5 +36,6 @@ module.exports = {
   ScheduledCourse,
   Conflict,
   ConflictCourse,
-  CourseSemester
+  CourseSemester,
+  ProfessorCourse // Add this line
 };

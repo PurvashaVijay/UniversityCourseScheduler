@@ -84,7 +84,10 @@ const ProfessorAvailabilityTab: React.FC<ProfessorAvailabilityTabProps> = ({
     // Convert availabilities array to a map for easier access
     const map: Record<string, boolean> = {};
     
-    availabilities.forEach(availability => {
+    // Make sure we handle both structured and flat availability data
+    const processedAvailabilities = Array.isArray(availabilities) ? availabilities : [];
+    
+    processedAvailabilities.forEach(availability => {
       const key = `${availability.day_of_week}-${availability.timeslot_id}`;
       map[key] = availability.is_available;
     });
@@ -188,8 +191,13 @@ const ProfessorAvailabilityTab: React.FC<ProfessorAvailabilityTabProps> = ({
         }
       }
       
+      console.log('Saving professor availability:', availabilityUpdates);
+      
       // Update professor availability on the server
-      const updatedAvailabilities = await professorService.setProfessorAvailability(professorId, availabilityUpdates);
+      const result = await professorService.setProfessorAvailability(professorId, availabilityUpdates);
+      
+      // Fetch the updated availabilities to refresh the component
+      const updatedAvailabilities = await professorService.getProfessorAvailability(professorId);
       
       // Update the parent component
       onAvailabilityChange(updatedAvailabilities);

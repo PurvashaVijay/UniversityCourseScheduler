@@ -1,8 +1,8 @@
-// courseController.js - Updated with the new getCourseWithSemesters method
+// courseController.js - Updated with the new getCourseProfessorAssignments method
 
 const { Op } = require('sequelize');
 
-const { Course, Department, Program, CourseProgram, CoursePrerequisite, CourseSemester } = require('../../app/models');
+const { Course, Department, Program, CourseProgram, CoursePrerequisite, CourseSemester, ProfessorCourse, Professor } = require('../../app/models');
 const { sequelize } = require('../../src/config/database');
 
 const { v4: uuidv4 } = require('uuid');
@@ -145,6 +145,49 @@ exports.getCourseWithSemesters = async (req, res) => {
   } catch (error) {
     console.error('Error retrieving course with semesters:', error);
     return res.status(500).json({ message: 'Failed to retrieve course details' });
+  }
+};
+
+// Add this to courseController.js - NEW ENDPOINT
+exports.getCourseProfessorAssignments = async (req, res) => {
+  try {
+    const courseId = req.params.id;
+    
+    // Get the course with its semesters
+    const course = await Course.findByPk(courseId);
+    
+    if (!course) {
+      return res.status(404).json({ message: 'Course not found' });
+    }
+    
+    // Get course semesters
+    const courseSemesters = await CourseSemester.findAll({
+      where: { course_id: courseId }
+    });
+    
+    // Get professor assignments for this course
+    const professorAssignments = await ProfessorCourse.findAll({
+      where: { course_id: courseId },
+      include: [
+        { model: Professor, attributes: ['professor_id', 'first_name', 'last_name'] }
+      ]
+    });
+    
+    // Format the response
+    const response = {
+      course_id: courseId,
+      available_semesters: courseSemesters.map(sem => sem.semester),
+      assigned_professors: professorAssignments.map(assignment => ({
+        professor_id: assignment.professor_id,
+        professor_name: `${assignment.Professor.first_name} ${assignment.Professor.last_name}`,
+        semester: assignment.semester
+      }))
+    };
+    
+    return res.status(200).json(response);
+  } catch (error) {
+    console.error('Error getting course-professor assignments:', error);
+    return res.status(500).json({ message: 'Failed to get course-professor assignments' });
   }
 };
 

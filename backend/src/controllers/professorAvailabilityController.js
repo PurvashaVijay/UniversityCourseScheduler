@@ -1,8 +1,6 @@
 // professorAvailabilityController.js
 // Place this in: /backend/src/controllers/professorAvailabilityController.js
 
-//const { ProfessorAvailability, Professor, TimeSlot } = require('../models');
-
 const { ProfessorAvailability, Professor, TimeSlot } = require('../../app/models');
 const { v4: uuidv4 } = require('uuid');
 
@@ -17,48 +15,13 @@ exports.getProfessorAvailability = async (req, res) => {
       return res.status(404).json({ message: 'Professor not found' });
     }
     
-    // Get all available time slots
-    const timeSlots = await TimeSlot.findAll({
-      order: [
-        ['day_of_week', 'ASC'],
-        ['start_time', 'ASC']
-      ]
-    });
-    
     // Get professor's availability settings
     const availabilitySettings = await ProfessorAvailability.findAll({
       where: { professor_id: professorId }
     });
     
-    // Map time slots with availability
-    const availability = timeSlots.map(slot => {
-      const availabilitySetting = availabilitySettings.find(
-        setting => setting.timeslot_id === slot.timeslot_id && 
-                  setting.day_of_week === slot.day_of_week
-      );
-      
-      return {
-        timeslot_id: slot.timeslot_id,
-        day_of_week: slot.day_of_week,
-        start_time: slot.start_time,
-        end_time: slot.end_time,
-        name: slot.name,
-        duration_minutes: slot.duration_minutes,
-        is_available: availabilitySetting ? availabilitySetting.is_available : false,
-        availability_id: availabilitySetting ? availabilitySetting.availability_id : null
-      };
-    });
-    
-    // Group by day of week
-    const availabilityByDay = {};
-    availability.forEach(slot => {
-      if (!availabilityByDay[slot.day_of_week]) {
-        availabilityByDay[slot.day_of_week] = [];
-      }
-      availabilityByDay[slot.day_of_week].push(slot);
-    });
-    
-    return res.status(200).json(availabilityByDay);
+    // Return flat array of availability records
+    return res.status(200).json(availabilitySettings);
   } catch (error) {
     console.error('Error retrieving professor availability:', error);
     return res.status(500).json({ message: 'Failed to retrieve professor availability' });
