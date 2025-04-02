@@ -1,16 +1,15 @@
 // src/components/admin/AdminLayout.tsx
 
-import React, { useState } from 'react';
-import { 
-  AppBar, 
-  Box, 
-  CssBaseline, 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  Drawer, 
-  IconButton, 
-  Toolbar, 
-  Typography, 
-  Tabs, 
+import React, { useState, useEffect } from 'react';
+import {
+  AppBar,
+  Box,
+  CssBaseline,
+  //Drawer,
+  IconButton,
+  Toolbar,
+  Typography,
+  Tabs,
   Tab,
   Avatar,
   Menu,
@@ -20,26 +19,41 @@ import {
 import MenuIcon from '@mui/icons-material/Menu';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import ExitToAppIcon from '@mui/icons-material/ExitToApp';
-import { useNavigate, Outlet, Link } from 'react-router-dom';
-//import { useAuth } from '../../contexts/AuthContext';
-//import udLogo from 'frontend\src\assets\ud-logo.png';
+import { useNavigate, Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+// Import the logo using require to handle potential bundling issues
 const udLogo = require('./ud-logo.png').default || require('./ud-logo.png');
+
 interface AdminLayoutProps {
   children?: React.ReactNode;
 }
 
 const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [currentTab, setCurrentTab] = useState(0);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  
+
+  // Determine if we're on the dashboard page
+  const isDashboard = location.pathname === '/admin/dashboard' || location.pathname === '/admin';
+
+  // Set the current tab based on the current route
+  useEffect(() => {
+    const path = location.pathname;
+    if (path.includes('/departments')) setCurrentTab(0);
+    else if (path.includes('/programs')) setCurrentTab(1);
+    else if (path.includes('/courses')) setCurrentTab(2);
+    else if (path.includes('/professors')) setCurrentTab(3);
+    else if (path.includes('/schedules')) setCurrentTab(4);
+    else setCurrentTab(-1); // Set to -1 for dashboard or other pages not in tabs
+  }, [location.pathname]);
+
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
   };
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setCurrentTab(newValue);
   };
@@ -58,6 +72,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   };
 
   const menuId = 'primary-search-account-menu';
+
   const renderMenu = (
     <Menu
       anchorEl={anchorEl}
@@ -95,14 +110,33 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             <MenuIcon />
           </IconButton>
           <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}>
-            <img src={udLogo} alt="University of Delaware Logo" style={{ height: 40, marginRight: 16 }} />
-            <Typography variant="h6" noWrap component="div" sx={{ display: { xs: 'none', sm: 'block' } }}>
-              Course Scheduling System
-            </Typography>
+            <Link to="/admin/dashboard" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center' }}>
+              {/* Use the imported logo */}
+              <img 
+                src={udLogo} 
+                alt="University of Delaware Logo" 
+                style={{ height: 40, marginRight: 16 }} 
+              />
+              <Typography 
+                variant="h6" 
+                noWrap 
+                component="div" 
+                sx={{ 
+                  display: { xs: 'none', sm: 'block' },
+                  color: isDashboard ? '#FFD200' : 'white',
+                  transition: 'color 0.3s ease',
+                  '&:hover': {
+                    color: '#FFD200'
+                  }
+                }}
+              >
+                Course Scheduling System
+              </Typography>
+            </Link>
           </Box>
           <Box sx={{ flexGrow: 1 }}>
-            <Tabs 
-              value={currentTab} 
+            <Tabs
+              value={currentTab}
               onChange={handleTabChange}
               textColor="inherit"
               indicatorColor="secondary"

@@ -62,120 +62,63 @@ const theme = createTheme({
 });
 
 const App: React.FC = () => {
-
   return (
-
     <ThemeProvider theme={theme}>
-
       <CssBaseline />
-
       <AuthProvider>
-
         <Router>
-
           <Routes>
-
             {/* Public routes */}
-
             <Route path="/login" element={<Login />} />
-
             <Route path="/unauthorized" element={<Unauthorized />} />
-
             
-
-            {/* Admin routes - FIXED NESTING */}
-
+            {/* Admin routes */}
             <Route path="/admin" element={
-
               <ProtectedRoute allowedRoles={['admin']}>
-
                 <AdminLayout />
-
               </ProtectedRoute>
-
             }>
-
-              <Route index element={<Navigate to="dashboard" replace />} />
-
+              {/* Dashboard as index route and explicit path */}
+              <Route index element={<Dashboard />} />
               <Route path="dashboard" element={<Dashboard />} />
-
               
-
               {/* Department routes */}
-
               <Route path="departments" element={<DepartmentList />} />
-
               <Route path="departments/new" element={<DepartmentForm />} />
-
               <Route path="departments/:id" element={<DepartmentDetails />} />
-
               <Route path="departments/:id/edit" element={<DepartmentForm />} />
-
               
-
               {/* Program routes */}
-
               <Route path="programs" element={<ProgramList />} />
-
               <Route path="programs/new" element={<ProgramForm />} />
-
               <Route path="programs/:id" element={<ProgramDetails />} />
-
               <Route path="programs/:id/edit" element={<ProgramForm />} />
 
-
-
               {/* Course routes */}
-
               <Route path="courses" element={<CourseList />} />
-
               <Route path="courses/new" element={<CourseForm />} />
-
               <Route path="courses/:id" element={<CourseDetails />} />
-
               <Route path="courses/:id/edit" element={<CourseForm />} />
-
               
-
               {/* Professor routes */}
-
               <Route path="professors" element={<ProfessorList />} />
-
               <Route path="professors/:id" element={<ProfessorDetails />} />
-
               
-
               {/* Active Schedule routes */}
-
               <Route path="schedules" element={<ScheduleView />} />
               <Route path="schedules/:id" element={<ScheduleView />} />
-
             </Route>
-
             
-
             {/* Redirect root to login */}
-
             <Route path="/" element={<Navigate to="/login" replace />} />
-
             
-
             {/* 404 - Not Found */}
-
             <Route path="*" element={<div>Page Not Found</div>} />
-
           </Routes>
-
         </Router>
-
       </AuthProvider>
-
     </ThemeProvider>
-
   );
-
 };
-
-
 
 export default App;
