@@ -84,32 +84,45 @@ const ProfessorAvailabilityTab: React.FC<ProfessorAvailabilityTabProps> = ({
     // Convert availabilities array to a map for easier access
     const map: Record<string, boolean> = {};
     
+    console.log('Processing availabilities:', availabilities);
+    
     // Make sure we handle both structured and flat availability data
     const processedAvailabilities = Array.isArray(availabilities) ? availabilities : [];
     
     processedAvailabilities.forEach(availability => {
       const key = `${availability.day_of_week}-${availability.timeslot_id}`;
       map[key] = availability.is_available;
+      console.log(`Setting availability for ${key} to ${availability.is_available}`);
     });
     
     setAvailabilityMap(map);
     
     // Calculate day availability based on timeslot availabilities
-    const newDayAvailability = { ...dayAvailability };
+    //const newDayAvailability = {}; // Create a new object instead of using spread
+    const newDayAvailability: Record<string, boolean> = {}; 
     
     for (const day of DAYS_OF_WEEK) {
-      const daySlotsAvailable = timeSlots
-        .filter(ts => ts.day_of_week === day || !ts.day_of_week)
-        .every(timeSlot => {
-          const key = `${day}-${timeSlot.timeslot_id}`;
-          return map[key] || false;
-        });
+      // Get time slots for this day
+      const dayTimeSlots = timeSlots.filter(ts => ts.day_of_week === day);
+      
+      if (dayTimeSlots.length === 0) {
+        console.log(`No time slots found for ${day}`);
+        newDayAvailability[day] = false;
+        continue;
+      }
+      
+      // Check if all time slots for this day are available
+      const daySlotsAvailable = dayTimeSlots.every(timeSlot => {
+        const key = `${day}-${timeSlot.timeslot_id}`;
+        return map[key] || false;
+      });
       
       newDayAvailability[day] = daySlotsAvailable;
+      console.log(`Day availability for ${day} set to ${daySlotsAvailable}`);
     }
     
     setDayAvailability(newDayAvailability);
-  }, [availabilities, timeSlots, dayAvailability]);
+  }, [availabilities, timeSlots]); // Remove dayAvailability from dependencies
 
   const handleAvailabilityChange = (day: string, timeSlotId: string, isAvailable: boolean) => {
     const key = `${day}-${timeSlotId}`;
@@ -174,10 +187,21 @@ const ProfessorAvailabilityTab: React.FC<ProfessorAvailabilityTabProps> = ({
       // Convert the map back to an array of availabilities
       const availabilityUpdates: ProfessorAvailability[] = [];
       
+      console.log('Saving availability for professor ID:', professorId);
+      
       for (const day of DAYS_OF_WEEK) {
-        for (const timeSlot of timeSlots) {
+        // Get time slots for this day
+        const dayTimeSlots = timeSlots.filter(ts => ts.day_of_week === day);
+        
+        if (dayTimeSlots.length === 0) {
+          console.log(`No time slots found for ${day}`);
+          continue;
+        }
+        
+        // Process each time slot for this day
+        for (const timeSlot of dayTimeSlots) {
           const key = `${day}-${timeSlot.timeslot_id}`;
-          const isAvailable = availabilityMap[key] || false;
+          const isAvailable = availabilityMap[key] !== undefined ? availabilityMap[key] : false;
           
           availabilityUpdates.push({
             availability_id: '', // will be assigned by the backend
@@ -191,12 +215,13 @@ const ProfessorAvailabilityTab: React.FC<ProfessorAvailabilityTabProps> = ({
         }
       }
       
-      console.log('Saving professor availability:', availabilityUpdates);
+      console.log(`Saving ${availabilityUpdates.length} availability records`);
       
-      // Update professor availability on the server
+      // Use professorService to save the availability
       const result = await professorService.setProfessorAvailability(professorId, availabilityUpdates);
+      console.log('Save result:', result);
       
-      // Fetch the updated availabilities to refresh the component
+      // Fetch the updated availabilities
       const updatedAvailabilities = await professorService.getProfessorAvailability(professorId);
       
       // Update the parent component
@@ -206,9 +231,9 @@ const ProfessorAvailabilityTab: React.FC<ProfessorAvailabilityTabProps> = ({
       setSuccessMessage('Availability successfully updated');
       setTimeout(() => setSuccessMessage(null), 3000);
       
-    } catch (err) {
-      setError('Failed to save availability');
-      console.error(err);
+    } catch (err: any) {
+      setError(`Failed to save availability: ${err.message || 'Unknown error'}`);
+      console.error('Error saving availability:', err);
     } finally {
       setSaving(false);
     }

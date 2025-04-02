@@ -277,13 +277,16 @@ export const getProfessorAvailability = async (professorId: string): Promise<Pro
   }
 };
 
-// Set professor availability
+// Set professor availability with enhanced error handling
 export const setProfessorAvailability = async (
   professorId: string,
   availabilities: ProfessorAvailability[]
-): Promise<ProfessorAvailability[]> => {
+): Promise<any> => {
   try {
     const token = localStorage.getItem('token');
+    console.log('Setting availability for professor:', professorId);
+    console.log('Availability data being sent:', availabilities);
+    
     const response = await fetch(`${API_URL}/professors/${professorId}/availability`, {
       method: 'POST',
       headers: {
@@ -293,11 +296,23 @@ export const setProfessorAvailability = async (
       body: JSON.stringify({ availability: availabilities })
     });
     
+    console.log('Response status:', response.status);
+    
     if (!response.ok) {
-      throw new Error(`Failed to update availability for professor ${professorId}`);
+      const errorText = await response.text();
+      console.error('Error response:', errorText);
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch (e) {
+        errorData = { message: errorText || 'Unknown error' };
+      }
+      throw new Error(errorData.message || `Failed to update availability for professor ${professorId}`);
     }
     
-    return await response.json();
+    const data = await response.json();
+    console.log('setProfessorAvailability response:', data);
+    return data;
   } catch (error) {
     console.error(`Error in setProfessorAvailability for professor ID ${professorId}:`, error);
     throw error;

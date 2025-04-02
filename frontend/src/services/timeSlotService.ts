@@ -1,5 +1,8 @@
 // src/services/timeSlotService.ts
 
+// API base URL
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
+
 // Add TimeSlot type definition
 export interface TimeSlot {
   timeslot_id: string;
@@ -222,7 +225,32 @@ const randomDelay = () => delay(Math.random() * 300 + 100); // Random delay betw
 const timeSlotService = {
   getAllTimeSlots: async (): Promise<TimeSlot[]> => {
     try {
-      // Simulate API delay
+      // Get token for authentication
+      const token = localStorage.getItem('token');
+      
+      // First try to call the real API
+      if (token) {
+        try {
+          console.log('Fetching time slots from API...');
+          const response = await fetch(`${API_URL}/timeslots`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            console.log('Time slots fetched successfully:', data);
+            return data;
+          }
+        } catch (apiError) {
+          console.warn('API call failed, falling back to mock data:', apiError);
+        }
+      }
+      
+      // Fallback to mock data if API call fails
+      console.log('Using mock time slots data');
       await randomDelay();
       return [...MOCK_TIMESLOTS];
     } catch (error) {
