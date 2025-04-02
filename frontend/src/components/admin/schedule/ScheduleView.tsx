@@ -19,13 +19,17 @@ import {
   Tabs,
   Tab,
   Tooltip,
+ //IconButton,
   TextField
 } from '@mui/material';
 import { SelectChangeEvent } from '@mui/material/Select';
 import AddIcon from '@mui/icons-material/Add';
 import RefreshIcon from '@mui/icons-material/Refresh';
+//import FilterListIcon from '@mui/icons-material/FilterList';
 import WarningIcon from '@mui/icons-material/Warning';
+//import InfoIcon from '@mui/icons-material/Info';
 import SearchIcon from '@mui/icons-material/Search';
+import GetAppIcon from '@mui/icons-material/GetApp';
 import { useNavigate } from 'react-router-dom';
 
 // Import services
@@ -47,7 +51,7 @@ const ScheduleView: React.FC = () => {
   const [semesters, setSemesters] = useState<any[]>([]);
   
   const [selectedDepartment, setSelectedDepartment] = useState<string>('');
-  const [selectedProgram, setSelectedProgram] = useState<string>('');
+  const [selectedProgram, setSelectedProgram] = useState<string>('all'); // Default to 'all' programs
   const [selectedSemester, setSelectedSemester] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [viewMode, setViewMode] = useState<string>('week');
@@ -180,8 +184,8 @@ const ScheduleView: React.FC = () => {
       );
     }
     
-    // Filter by program
-    if (selectedProgram) {
+    // Filter by program - if "all" is selected, don't filter by program
+    if (selectedProgram && selectedProgram !== 'all') {
       filtered = filtered.filter(course => 
         course.program_ids?.includes(selectedProgram)
       );
@@ -204,12 +208,37 @@ const ScheduleView: React.FC = () => {
     const deptId = event.target.value as string;
     setSelectedDepartment(deptId);
     
-    // Reset program selection when department changes
-    setSelectedProgram('');
+    // Reset program selection when department changes, but set to "all" instead of empty
+    setSelectedProgram('all');
   };
   
   const handleProgramChange = (event: SelectChangeEvent) => {
     setSelectedProgram(event.target.value as string);
+    
+    // If user selects "all programs", we need to update the filtered courses
+    // to show all courses for the selected department
+    if (event.target.value === 'all') {
+      let filtered = [...scheduledCourses];
+      
+      // Keep department filter if selected
+      if (selectedDepartment) {
+        filtered = filtered.filter(course => 
+          course.department_id === selectedDepartment
+        );
+      }
+      
+      // Apply search filter if any
+      if (searchTerm) {
+        const search = searchTerm.toLowerCase();
+        filtered = filtered.filter(course => 
+          course.course_name.toLowerCase().includes(search) ||
+          course.course_id.toLowerCase().includes(search) ||
+          (course.professor_name && course.professor_name.toLowerCase().includes(search))
+        );
+      }
+      
+      setFilteredCourses(filtered);
+    }
   };
   
   const handleSemesterChange = (event: SelectChangeEvent) => {
@@ -245,6 +274,58 @@ const ScheduleView: React.FC = () => {
       setError("Failed to refresh data");
     } finally {
       setLoading(false);
+    }
+  };
+  
+  const handleExport = () => {
+    if (!schedule || !filteredCourses.length) {
+      setError("No schedule data available to export");
+      return;
+    }
+
+    try {
+      // Create a formatted schedule for export
+      const semesterName = semesters.find(s => s.semester_id === selectedSemester)?.name || 'Current Semester';
+      
+      // Create header rows
+      let csvContent = "Course Schedule - " + semesterName + "\n";
+      csvContent += "Generated on: " + new Date().toLocaleString() + "\n\n";
+      
+      // Column headers
+      csvContent += "Course ID,Course Name,Professor,Day,Time,Room,Type\n";
+      
+      // Add data rows
+      filteredCourses.forEach(course => {
+        const timeSlotId = course.time_slot_id;
+        const slotNumber = parseInt(timeSlotId.replace(/[^\d]/g, ''));
+        const timeSlot = timeSlots.find(ts => ts.id === slotNumber) || { start: "", end: "" };
+        
+        const row = [
+          course.course_id,
+          course.course_name,
+          course.professor_name || 'TBA',
+          course.day_of_week,
+          `${timeSlot.start}-${timeSlot.end}`,
+          course.room || 'TBA',
+          course.is_core ? 'Core' : 'Elective'
+        ];
+        
+        csvContent += row.join(',') + '\n';
+      });
+      
+      // Create and download the file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `schedule_${semesterName.replace(/\s+/g, '_')}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error("Error exporting schedule:", err);
+      setError("Failed to export schedule");
     }
   };
   
@@ -630,6 +711,15 @@ const ScheduleView: React.FC = () => {
               Refresh
             </Button>
             <Button
+              variant="outlined"
+              color="primary"
+              startIcon={<GetAppIcon />}
+              onClick={handleExport}
+              sx={{ mr: 2 }}
+            >
+              Export
+            </Button>
+            <Button
               variant="contained"
               color="primary"
               startIcon={<AddIcon />}
@@ -698,7 +788,7 @@ const ScheduleView: React.FC = () => {
                     label="Program"
                     disabled={!selectedDepartment}
                   >
-                    <MenuItem value="">
+                    <MenuItem value="all">
                       <em>All Programs</em>
                     </MenuItem>
                     {programs
@@ -730,51 +820,98 @@ const ScheduleView: React.FC = () => {
         
         {/* View Mode Tabs */}
         <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-          <Tabs value={viewMode} onChange={handleViewModeChange}>
-            <Tab label="Week View" value="week" />
-            <Tab label="Day View" value="day" />
-          </Tabs>
-        </Box>
+        <Tabs value={viewMode} onChange={handleViewModeChange}>
 
-        {/* Day Selection Tabs (for Day View) */}
-        {viewMode === 'day' && (
-          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-            <Tabs value={currentDay} onChange={handleDayChange}>
-              {daysOfWeek.map((day, index) => (
-                <Tab key={day} label={day} value={index} />
-              ))}
-            </Tabs>
-          </Box>
-        )}
-        
-        {/* Schedule Display */}
-        {viewMode === 'week' ? renderWeekView() : renderDayView()}
-        
-        {/* Conflicts */}
-        {renderConflicts()}
-        
-        {/* Legend */}
-        <Box sx={{ mt: 3, display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', mr: 3, mb: 1 }}>
-            <Box sx={{ width: 16, height: 16, bgcolor: 'rgba(25, 118, 210, 0.8)', mr: 1, borderRadius: 1 }} />
-            <Typography variant="caption">Core Course</Typography>
-          </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', mr: 3, mb: 1 }}>
-            <Box sx={{ width: 16, height: 16, bgcolor: 'rgba(76, 175, 80, 0.8)', mr: 1, borderRadius: 1 }} />
-            <Typography variant="caption">Elective Course</Typography>
-          </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', mr: 3, mb: 1 }}>
-            <Box sx={{ width: 16, height: 16, bgcolor: 'rgba(255, 152, 0, 0.8)', mr: 1, borderRadius: 1 }} />
-            <Typography variant="caption">Overridden Course</Typography>
-          </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-            <WarningIcon sx={{ color: 'orange', fontSize: 16, mr: 1 }} />
-            <Typography variant="caption">Scheduling Conflict</Typography>
-          </Box>
-        </Box>
-      </Box>
-    </Container>
-  );
+<Tab label="Week View" value="week" />
+
+<Tab label="Day View" value="day" />
+
+</Tabs>
+
+</Box>
+
+
+
+{/* Day Selection Tabs (for Day View) */}
+
+{viewMode === 'day' && (
+
+<Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+
+<Tabs value={currentDay} onChange={handleDayChange}>
+
+  {daysOfWeek.map((day, index) => (
+
+    <Tab key={day} label={day} value={index} />
+
+  ))}
+
+</Tabs>
+
+</Box>
+
+)}
+
+
+
+{/* Schedule Display */}
+
+{viewMode === 'week' ? renderWeekView() : renderDayView()}
+
+
+
+{/* Conflicts */}
+
+{renderConflicts()}
+
+
+
+{/* Legend */}
+
+<Box sx={{ mt: 3, display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
+
+<Box sx={{ display: 'flex', alignItems: 'center', mr: 3, mb: 1 }}>
+
+<Box sx={{ width: 16, height: 16, bgcolor: 'rgba(25, 118, 210, 0.8)', mr: 1, borderRadius: 1 }} />
+
+<Typography variant="caption">Core Course</Typography>
+
+</Box>
+
+<Box sx={{ display: 'flex', alignItems: 'center', mr: 3, mb: 1 }}>
+
+<Box sx={{ width: 16, height: 16, bgcolor: 'rgba(76, 175, 80, 0.8)', mr: 1, borderRadius: 1 }} />
+
+<Typography variant="caption">Elective Course</Typography>
+
+</Box>
+
+<Box sx={{ display: 'flex', alignItems: 'center', mr: 3, mb: 1 }}>
+
+<Box sx={{ width: 16, height: 16, bgcolor: 'rgba(255, 152, 0, 0.8)', mr: 1, borderRadius: 1 }} />
+
+<Typography variant="caption">Overridden Course</Typography>
+
+</Box>
+
+<Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+
+<WarningIcon sx={{ color: 'orange', fontSize: 16, mr: 1 }} />
+
+<Typography variant="caption">Scheduling Conflict</Typography>
+
+</Box>
+
+</Box>
+
+</Box>
+
+</Container>
+
+
+
+);
+
 };
 
 export default ScheduleView;
