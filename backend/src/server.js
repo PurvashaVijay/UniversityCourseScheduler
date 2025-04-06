@@ -30,6 +30,7 @@ app.get('/', (req, res) => {
 
 // Routes
 app.use('/api/departments', departmentRoutes);
+//app.use('/api/departments', require('./routes/departmentRoutes'));
 // In server.js, add this line:
 app.use('/api/professors', require('./routes/professorRoutes'));
 // In server.js, update the line:
@@ -37,9 +38,12 @@ app.use('/api', require('./routes/professorAvailabilityRoutes'));
 app.use('/api/courses', require('./routes/courseRoutes'));
 app.use('/api/programs', require('./routes/programRoutes'));
 app.use('/api/timeslots', require('./routes/timeSlotRoutes'));
+//app.use('/api/time-slots', require('./routes/timeSlotRoutes'));
 app.use('/api/semesters', require('./routes/semesterRoutes'));
 app.use('/api/schedules', require('./routes/scheduleRoutes'));
+app.use('/api/scheduled-courses', require('./routes/scheduledCourseRoutes'));
 app.use('/api/scheduler', require('./routes/schedulerRoutes'));
+//app.use('/api/conflicts', require('./routes/conflictRoutes'));
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api', require('./routes/scheduledCourseRoutes'));
 

@@ -12,7 +12,14 @@ def run_scheduler(input_json):
     """Run the scheduler with the given input JSON"""
     try:
         # Parse the input data
+        print(f"Received data of length: {len(input_json)}", file=sys.stderr)
         data = json.loads(input_json)
+
+        # Log input data summary for debugging
+        print(f"Processing schedule for ID: {data.get('scheduleId')}", file=sys.stderr)
+        print(f"Data contains: {len(data.get('courses', []))} courses, " + 
+            f"{len(data.get('professors', []))} professors, " +
+            f"{len(data.get('timeSlots', []))} time slots", file=sys.stderr)
         
         # Initialize the scheduler
         scheduler = CourseScheduler(data)
@@ -22,13 +29,16 @@ def run_scheduler(input_json):
         solution = scheduler.solve()
         
         # Return the solution as JSON
-        return json.dumps({
+        result = {
             "success": True,
             "result": solution
-        })
+        }
+        return json.dumps(result)
     except Exception as e:
         # Capture and return any errors
         error_traceback = traceback.format_exc()
+        print(f"Error in scheduler: {str(e)}", file=sys.stderr)
+        print(error_traceback, file=sys.stderr)
         return json.dumps({
             "success": False,
             "error": str(e),

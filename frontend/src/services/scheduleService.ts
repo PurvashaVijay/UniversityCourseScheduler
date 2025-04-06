@@ -1,5 +1,5 @@
 // src/services/scheduleService.ts
-import { v4 as uuidv4 } from 'uuid';
+//import { v4 as uuidv4 } from 'uuid';
 
 // Define the base API URL
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
@@ -36,6 +36,7 @@ export interface Schedule {
   conflicts: any[];
   created_at: string;
   updated_at: string;
+  ScheduledCourses?: any[];
 }
 
 export interface Conflict {
@@ -78,6 +79,8 @@ export interface ScheduleOverride {
 export const getActiveSchedule = async (semesterId: string): Promise<Schedule> => {
   try {
     const token = localStorage.getItem('token');
+    console.log(`Fetching active schedule for semester: ${semesterId}`);
+
     const response = await fetch(`${API_URL}/schedules/semester/${semesterId}/active`, {
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -86,63 +89,64 @@ export const getActiveSchedule = async (semesterId: string): Promise<Schedule> =
     });
 
     if (!response.ok) {
+      // If no active schedule exists, throw an error to be handled by caller
+      if (response.status === 404) {
+        console.error('No active schedule found for this semester');
+        throw new Error('No active schedule found for this semester');
+      }
+      console.error(`Failed to fetch active schedule: ${response.status} ${response.statusText}`);
       throw new Error('Failed to fetch active schedule');
     }
 
-    const data = await response.json();
-    return data;
+    const schedule = await response.json();
+    console.log(`Retrieved active schedule: ${schedule.schedule_id}`);
+    console.log('Schedule data structure:', {
+      hasScheduledCourses: !!schedule.ScheduledCourses,
+      scheduledCoursesLength: schedule.ScheduledCourses?.length || 0,
+      hasCourses: !!schedule.courses,
+      coursesLength: schedule.courses?.length || 0
+    });
+
+    // Use the courses property if it exists, otherwise format the ScheduledCourses
+    let formattedCourses = schedule.courses || [];
+
+    // If we don't have courses but we have ScheduledCourses, format them
+    if (!formattedCourses.length && schedule.ScheduledCourses?.length) {
+      formattedCourses = schedule.ScheduledCourses.map((sc: any) => ({
+        scheduled_course_id: sc.scheduled_course_id,
+        schedule_id: sc.schedule_id,
+        course_id: sc.Course?.course_id,
+        course_name: sc.Course?.course_name,
+        professor_id: sc.Professor?.professor_id,
+        professor_name: `${sc.Professor?.first_name || ''} ${sc.Professor?.last_name || ''}`.trim(),
+        timeslot_id: sc.timeslot_id,
+        day_of_week: sc.day_of_week,
+        time_slot_id: sc.timeslot_id,
+        is_core: sc.Course?.is_core || false,
+        is_override: sc.is_override || false,
+        created_at: sc.created_at,
+        updated_at: sc.updated_at,
+        department_id: sc.Course?.department_id
+      }));
+    }
+
+    return {
+      ...schedule,
+      schedule_id: schedule.schedule_id, // Ensure this is explicitly set
+      semester_id: schedule.semester_id,
+      semester_name: schedule.Semester?.name || 'Unknown',
+      name: schedule.name,
+      is_final: schedule.is_final,
+      courses: formattedCourses, // This is crucial
+      ScheduledCourses: schedule.ScheduledCourses, // Keep for compatibility
+      conflicts: [], // Conflicts will be fetched separately
+      created_at: schedule.created_at,
+      updated_at: schedule.updated_at
+    };
+    
   } catch (error) {
     console.error(`Error in getActiveSchedule for semester ${semesterId}:`, error);
-    
-    // Return mock data for development - remove in production
-    return {
-      schedule_id: `SCH-${uuidv4().substring(0, 8)}`,
-      semester_id: semesterId,
-      semester_name: "Spring 2025",
-      name: "Active Schedule",
-      is_final: true,
-      courses: [
-        {
-          scheduled_course_id: `SC-${uuidv4().substring(0, 8)}`,
-          schedule_id: `SCH-${uuidv4().substring(0, 8)}`,
-          course_id: "COURSE-001",
-          course_name: "Introduction to Programming",
-          professor_id: "PROF-001",
-          professor_name: "John Smith",
-          timeslot_id: "TS1-MON",
-          day_of_week: "Monday",
-          time_slot_id: "TS1-MON",
-          room: "MEM 201",
-          is_core: true,
-          is_override: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          department_id: "DEPT-001",
-          program_ids: ["PROG-001", "PROG-002"]
-        },
-        {
-          scheduled_course_id: `SC-${uuidv4().substring(0, 8)}`,
-          schedule_id: `SCH-${uuidv4().substring(0, 8)}`,
-          course_id: "COURSE-002",
-          course_name: "Database Systems",
-          professor_id: "PROF-002",
-          professor_name: "Jane Doe",
-          timeslot_id: "TS2-TUE",
-          day_of_week: "Tuesday",
-          time_slot_id: "TS2-TUE",
-          room: "PRN 105",
-          is_core: false,
-          is_override: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          department_id: "DEPT-001",
-          program_ids: ["PROG-001"]
-        }
-      ],
-      conflicts: [],
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
+    throw error;
   }
 };
 
@@ -185,74 +189,35 @@ export const getScheduleById = async (id: string): Promise<Schedule> => {
     }
 
     const data = await response.json();
-    return data;
+    
+    // Format the data to match the expected structure
+    const formattedCourses = data.ScheduledCourses?.map((sc: any) => ({
+      scheduled_course_id: sc.scheduled_course_id,
+      schedule_id: sc.schedule_id,
+      course_id: sc.Course?.course_id,
+      course_name: sc.Course?.course_name,
+      professor_id: sc.Professor?.professor_id,
+      professor_name: `${sc.Professor?.first_name} ${sc.Professor?.last_name}`,
+      timeslot_id: sc.timeslot_id,
+      day_of_week: sc.day_of_week,
+      time_slot_id: sc.timeslot_id,
+      room: sc.room || "TBA",
+      is_core: sc.Course?.is_core || false,
+      is_override: sc.is_override,
+      override_reason: sc.override_reason,
+      created_at: sc.created_at,
+      updated_at: sc.updated_at,
+      department_id: sc.Course?.department_id
+    })) || [];
+    
+    return {
+      ...data,
+      semester_name: data.Semester?.name || "Unknown Semester",
+      courses: formattedCourses
+    };
   } catch (error) {
     console.error(`Error in getScheduleById for ID ${id}:`, error);
-    
-    // Return mock data for development - can be removed in production
-    return {
-      schedule_id: "SCH-001",
-      semester_id: "SEM-001",
-      semester_name: "Fall 2023",
-      name: "Fall 2023 Schedule",
-      is_final: false,
-      courses: [
-        {
-          scheduled_course_id: "SC-001",
-          schedule_id: "SCH-001",
-          course_id: "COURSE-001",
-          course_name: "Introduction to Programming",
-          professor_id: "PROF-001",
-          professor_name: "John Doe",
-          timeslot_id: "TS1-MON",
-          day_of_week: "Monday",
-          time_slot_id: "TS1-MON",
-          is_core: true,
-          is_override: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          department_id: "DEPT-001",
-          program_ids: ["PROG-001", "PROG-002"]
-        },
-        {
-          scheduled_course_id: "SC-002",
-          schedule_id: "SCH-001",
-          course_id: "COURSE-002",
-          course_name: "Data Structures",
-          professor_id: "PROF-002",
-          professor_name: "Jane Smith",
-          timeslot_id: "TS2-MON",
-          day_of_week: "Monday",
-          time_slot_id: "TS2-MON",
-          is_core: true,
-          is_override: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          department_id: "DEPT-001",
-          program_ids: ["PROG-001"]
-        },
-        {
-          scheduled_course_id: "SC-003",
-          schedule_id: "SCH-001",
-          course_id: "COURSE-003",
-          course_name: "Algorithms",
-          professor_id: "PROF-001",
-          professor_name: "John Doe",
-          timeslot_id: "TS3-TUE",
-          day_of_week: "Tuesday",
-          time_slot_id: "TS3-TUE",
-          is_core: true,
-          is_override: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          department_id: "DEPT-001",
-          program_ids: ["PROG-001"]
-        }
-      ],
-      conflicts: [],
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
+    throw error;
   }
 };
 
@@ -271,68 +236,40 @@ export const getScheduleConflicts = async (scheduleId: string): Promise<Conflict
       throw new Error('Failed to fetch schedule conflicts');
     }
 
-    return await response.json();
+    const conflicts = await response.json();
+    
+    // Format conflicts to match the expected structure
+    return conflicts.map((conflict: any) => {
+      const courses = conflict.ScheduledCourses?.map((sc: any) => ({
+        scheduled_course_id: sc.scheduled_course_id,
+        course_id: sc.Course?.course_id,
+        course_name: sc.Course?.course_name,
+        professor_id: sc.Professor?.professor_id,
+        professor_name: `${sc.Professor?.first_name} ${sc.Professor?.last_name}`
+      })) || [];
+      
+      const timeSlot = {
+        name: conflict.TimeSlot?.name || '',
+        start_time: conflict.TimeSlot?.start_time || '',
+        end_time: conflict.TimeSlot?.end_time || ''
+      };
+      
+      return {
+        conflict_id: conflict.conflict_id,
+        schedule_id: conflict.schedule_id,
+        timeslot_id: conflict.timeslot_id,
+        day_of_week: conflict.day_of_week,
+        conflict_type: conflict.conflict_type,
+        description: conflict.description,
+        is_resolved: conflict.is_resolved,
+        resolution_notes: conflict.resolution_notes,
+        time_slot: timeSlot,
+        courses: courses
+      };
+    });
   } catch (error) {
     console.error(`Error fetching conflicts for schedule ${scheduleId}:`, error);
-    
-    // Return mock data for development - can be removed in production
-    return [
-      {
-        conflict_id: "CONF-001",
-        schedule_id: "SCH-001",
-        timeslot_id: "TS3-MON",
-        day_of_week: "Monday",
-        conflict_type: "TIME_SLOT_CONFLICT",
-        description: "Multiple core courses scheduled in the same time slot",
-        is_resolved: false,
-        resolution_notes: null,
-        time_slot: {
-          name: "Time Slot 3",
-          start_time: "11:30",
-          end_time: "12:25"
-        },
-        courses: [
-          {
-            scheduled_course_id: "SC-001",
-            course_id: "COURSE-001",
-            course_name: "Introduction to Programming",
-            professor_id: "PROF-001",
-            professor_name: "John Doe"
-          },
-          {
-            scheduled_course_id: "SC-007",
-            course_id: "COURSE-007",
-            course_name: "Software Engineering",
-            professor_id: "PROF-004",
-            professor_name: "Emily Davis"
-          }
-        ]
-      },
-      {
-        conflict_id: "CONF-002",
-        schedule_id: "SCH-001",
-        timeslot_id: "TS1-FRI",
-        day_of_week: "Friday",
-        conflict_type: "PROFESSOR_AVAILABILITY",
-        description: "Professor is not available at this time slot",
-        is_resolved: true,
-        resolution_notes: "Conflict manually overridden by administrator",
-        time_slot: {
-          name: "Time Slot 1",
-          start_time: "09:10",
-          end_time: "10:05"
-        },
-        courses: [
-          {
-            scheduled_course_id: "SC-006",
-            course_id: "COURSE-006",
-            course_name: "Operating Systems",
-            professor_id: "PROF-003",
-            professor_name: "Robert Johnson"
-          }
-        ]
-      }
-    ];
+    throw error;
   }
 };
 
@@ -356,12 +293,7 @@ export const resolveConflict = async (conflictId: string, resolution: ConflictRe
     return await response.json();
   } catch (error) {
     console.error(`Error resolving conflict ${conflictId}:`, error);
-    
-    // For development, return a mock success response
-    return {
-      success: true,
-      message: 'Conflict resolved successfully'
-    };
+    throw error;
   }
 };
 
@@ -388,36 +320,70 @@ export const overrideScheduledCourse = async (
     return await response.json();
   } catch (error) {
     console.error(`Error overriding course in schedule ${scheduleId}:`, error);
-    
-    // For development, return a mock success response
-    return {
-      success: true,
-      message: 'Course successfully overridden'
-    };
+    throw error;
   }
 };
 
-// Generate a new schedule
+
+// In scheduleService.ts - update the generateSchedule function
 export const generateSchedule = async (semesterId: string, name: string): Promise<Schedule> => {
   try {
+    console.log(`Generating schedule for semester ${semesterId} with name: ${name}`);
     const token = localStorage.getItem('token');
-    const response = await fetch(`${API_URL}/schedules/generate`, {
+    
+    if (!token) {
+      throw new Error('Authentication token is missing');
+    }
+    
+    const response = await fetch(`${API_URL}/scheduler/generate`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ semesterId, name })
+      body: JSON.stringify({ semester_id: semesterId, name })
     });
 
+    console.log('Response status:', response.status);
+    
     if (!response.ok) {
-      throw new Error('Failed to generate schedule');
+      const errorData = await response.json();
+      console.error('Error response from server:', errorData);
+      throw new Error(errorData.message || 'Failed to generate schedule');
     }
 
-    return await response.json();
+    const data = await response.json();
+    console.log('Successfully generated schedule:', data);
+    return data.schedule;
   } catch (error) {
     console.error('Error generating schedule:', error);
     throw error;
+  }
+};
+
+export const forceScheduleRefresh = async (scheduleId: string): Promise<boolean> => {
+  try {
+    const token = localStorage.getItem('token');
+    console.log(`Force refreshing schedule: ${scheduleId}`);
+    
+    // Make a direct call to get this specific schedule
+    const response = await fetch(`${API_URL}/schedules/${scheduleId}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      console.error(`Failed to refresh schedule ${scheduleId}: ${response.status}`);
+      return false;
+    }
+
+    console.log(`Successfully refreshed schedule: ${scheduleId}`);
+    return true;
+  } catch (error) {
+    console.error(`Error refreshing schedule ${scheduleId}:`, error);
+    return false;
   }
 };
 
@@ -428,7 +394,8 @@ const scheduleService = {
   getScheduleConflicts,
   resolveConflict,
   overrideScheduledCourse,
-  generateSchedule
+  generateSchedule,
+  forceScheduleRefresh  // Add this line
 };
 
 export default scheduleService;

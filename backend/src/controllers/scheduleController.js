@@ -1,5 +1,4 @@
 // scheduleController.js
-//const { Schedule, Semester, ScheduledCourse, Course, Professor, TimeSlot, Conflict, ConflictCourse } = require('../models');
 const { Schedule, Semester, ScheduledCourse, Course, Professor, TimeSlot, Conflict, ConflictCourse } = require('../../app/models');
 const { v4: uuidv4 } = require('uuid');
 const { Op } = require('sequelize');
@@ -21,43 +20,102 @@ exports.getAllSchedules = async (req, res) => {
 // Get schedule by ID
 exports.getScheduleById = async (req, res) => {
   try {
-    const schedule = await Schedule.findByPk(req.params.id, {
-      include: [
-        { model: Semester, attributes: ['name', 'start_date', 'end_date'] },
-        { 
-          model: ScheduledCourse,
-          include: [
-            { model: Course, attributes: ['course_name', 'is_core', 'duration_minutes'] },
-            { model: Professor, attributes: ['first_name', 'last_name'] },
-            { model: TimeSlot, attributes: ['name', 'start_time', 'end_time', 'day_of_week'] }
-          ]
-        },
-        {
-          model: Conflict,
-          include: [
-            { 
-              model: ScheduledCourse, 
-              through: ConflictCourse,
-              include: [
-                { model: Course, attributes: ['course_name', 'is_core'] },
-                { model: Professor, attributes: ['first_name', 'last_name'] }
-              ]
-            }
-          ]
-        }
-      ]
-    });
+    console.log(`Loading schedule by ID: ${req.params.id}`);
+    
+    // First, get the schedule without eager loading to avoid potential issues
+    const schedule = await Schedule.findByPk(req.params.id);
     
     if (!schedule) {
       return res.status(404).json({ message: 'Schedule not found' });
     }
     
-    return res.status(200).json(schedule);
+    // Then, manually fetch the scheduled courses with their relationships
+    const scheduledCourses = await ScheduledCourse.findAll({
+      where: { schedule_id: req.params.id },
+      include: [
+        { model: Course, attributes: ['course_id', 'course_name', 'is_core', 'department_id', 'duration_minutes'] },
+        { model: Professor, attributes: ['professor_id', 'first_name', 'last_name'] },
+        { model: TimeSlot, attributes: ['timeslot_id', 'name', 'start_time', 'end_time', 'day_of_week'] }
+      ]
+    });
+    
+    console.log(`Found schedule ${req.params.id} with ${scheduledCourses.length} scheduled courses`);
+    
+    // Transform them into the format the frontend expects
+    const formattedCourses = scheduledCourses.map(sc => {
+      const scJson = sc.toJSON();
+      
+      // Extract the time slot number from the timeslot_id (e.g., "TS1-MON" -> 1)
+      let slotNumber = 1;
+      if (scJson.timeslot_id) {
+        const timeSlotMatch = scJson.timeslot_id.match(/TS(\d+)/);
+        if (timeSlotMatch) {
+          slotNumber = parseInt(timeSlotMatch[1]);
+        }
+      }
+
+      // Normalize the day name
+      let dayOfWeek = scJson.day_of_week || '';
+      // Convert to proper case if needed
+      const dayMap = {
+        'MON': 'Monday',
+        'TUE': 'Tuesday', 
+        'WED': 'Wednesday',
+        'THU': 'Thursday',
+        'FRI': 'Friday'
+      };
+      
+      if (dayMap[dayOfWeek.toUpperCase()]) {
+        dayOfWeek = dayMap[dayOfWeek.toUpperCase()];
+      }
+      
+      // Create the formatted course object
+      return {
+        scheduled_course_id: scJson.scheduled_course_id,
+        schedule_id: scJson.schedule_id,
+        course_id: scJson.Course?.course_id,
+        course_name: scJson.Course?.course_name,
+        professor_id: scJson.Professor?.professor_id,
+        professor_name: `${scJson.Professor?.first_name || ''} ${scJson.Professor?.last_name || ''}`.trim(),
+        timeslot_id: scJson.timeslot_id,
+        day_of_week: dayOfWeek,
+        time_slot_id: scJson.timeslot_id,
+        time_slot_number: slotNumber,
+        is_core: scJson.Course?.is_core || false,
+        is_override: scJson.is_override || false,
+        department_id: scJson.Course?.department_id,
+        duration_minutes: scJson.Course?.duration_minutes
+      };
+    });
+
+    console.log(`Processed ${formattedCourses.length} courses for schedule ${req.params.id}`);
+    
+    // Log the first course as a sample to verify structure
+    if (formattedCourses.length > 0) {
+      console.log('Sample course structure:', JSON.stringify(formattedCourses[0]));
+    }
+
+    // Create a basic response with the schedule details
+    const scheduleData = schedule.toJSON();
+    
+    // Also fetch semester details
+    const semester = await Semester.findByPk(scheduleData.semester_id);
+    
+    // Add the formatted courses to the schedule
+    const responseData = {
+      ...scheduleData,
+      semester: semester ? semester.toJSON() : null,
+      courses: formattedCourses
+    };
+
+    console.log(`Returning schedule with ${formattedCourses.length} courses`);
+    return res.status(200).json(responseData);
   } catch (error) {
     console.error('Error retrieving schedule:', error);
-    return res.status(500).json({ message: 'Failed to retrieve schedule' });
+    return res.status(500).json({ message: 'Failed to retrieve schedule', error: error.message });
   }
 };
+
 
 // Create new schedule
 exports.createSchedule = async (req, res) => {
@@ -204,6 +262,151 @@ exports.getSchedulesBySemester = async (req, res) => {
   }
 };
 
+// Get active semester schedule
+exports.getActiveSemesterSchedule = async (req, res) => {
+  try {
+    const semesterId = req.params.semesterId;
+    
+    // Check if semester exists
+    const semester = await Semester.findByPk(semesterId);
+    if (!semester) {
+      return res.status(404).json({ message: 'Semester not found' });
+    }
+    
+    // Find schedules for this semester, ordered by creation date (newest first)
+    const schedules = await Schedule.findAll({
+      where: { semester_id: semesterId },
+      include: [{ model: Semester, attributes: ['name', 'start_date', 'end_date'] }],
+      order: [['created_at', 'DESC']]
+    });
+    
+    if (schedules.length === 0) {
+      return res.status(404).json({ message: 'No schedules found for this semester' });
+    }
+
+    // NEW CODE: Find the first schedule that has courses
+    let scheduleWithCourses = null;
+    for (const schedule of schedules) {
+      // Check if this schedule has any courses
+      const courseCount = await ScheduledCourse.count({ 
+        where: { schedule_id: schedule.schedule_id } 
+      });
+      
+      console.log(`Schedule ${schedule.schedule_id} has ${courseCount} courses`);
+      
+      if (courseCount > 0) {
+        // Use this schedule since it has courses
+        scheduleWithCourses = schedule;
+        break;
+      }
+    }
+    
+    // Select schedule with courses, or fall back to final or first schedule
+    const activeSchedule = scheduleWithCourses || (schedules.find(s => s.is_final) || schedules[0]);
+    console.log(`Selected active schedule: ${activeSchedule.schedule_id}`);
+    
+    // Get detailed schedule with all relationships
+    const detailedSchedule = await Schedule.findByPk(activeSchedule.schedule_id, {
+      include: [
+        { model: Semester, attributes: ['name', 'start_date', 'end_date'] },
+        { 
+          model: ScheduledCourse,
+          include: [
+            { model: Course, attributes: ['course_id', 'course_name', 'is_core', 'department_id', 'duration_minutes'] },
+            { model: Professor, attributes: ['professor_id', 'first_name', 'last_name'] },
+            { model: TimeSlot, attributes: ['timeslot_id', 'name', 'start_time', 'end_time', 'day_of_week'] }
+          ]
+        }
+      ]
+    });
+    
+    // Before sending the response, transform the data to match frontend expectations
+    const formattedCourses = detailedSchedule.ScheduledCourses?.map(sc => {
+      // Extract the time slot number from the timeslot_id (e.g., "TS1-MON" -> 1)
+      let slotNumber = 1;
+      const timeSlotMatch = sc.timeslot_id?.match(/TS(\d+)/);
+      if (timeSlotMatch) {
+        slotNumber = parseInt(timeSlotMatch[1]);
+      }
+    
+      // Make sure day_of_week is properly formatted
+      let dayOfWeek = sc.day_of_week || '';
+      
+      // Normalize the day name if needed
+      const dayMap = {
+        'MON': 'Monday',
+        'TUE': 'Tuesday', 
+        'WED': 'Wednesday',
+        'THU': 'Thursday',
+        'FRI': 'Friday'
+      };
+      // If it's a short code, convert it
+      if (dayMap[dayOfWeek]) {
+        dayOfWeek = dayMap[dayOfWeek];
+      }
+      
+      return {
+        scheduled_course_id: sc.scheduled_course_id,
+        schedule_id: sc.schedule_id,
+        course_id: sc.Course?.course_id,
+        course_name: sc.Course?.course_name,
+        professor_id: sc.Professor?.professor_id,
+        professor_name: `${sc.Professor?.first_name || ''} ${sc.Professor?.last_name || ''}`.trim(),
+        timeslot_id: sc.timeslot_id,
+        day_of_week: dayOfWeek,
+        time_slot_id: sc.timeslot_id,
+        time_slot_number: slotNumber,
+        is_core: sc.Course?.is_core || false,
+        is_override: sc.is_override || false,
+        created_at: sc.created_at,
+        updated_at: sc.updated_at,
+        department_id: sc.Course?.department_id,
+        duration_minutes: sc.Course?.duration_minutes
+      };
+    }) || [];
+
+    const transformedResult = {
+      ...detailedSchedule.toJSON(),
+      courses: formattedCourses,
+      ScheduledCourses: detailedSchedule.ScheduledCourses // Keep original for backward compatibility
+    };
+    
+    /*
+    // Create a transformed result that includes both formats for compatibility
+    const transformedResult = {
+      message: 'Schedule generated successfully',
+      schedule: {
+        ...result.schedule.toJSON(),
+        courses: formattedCourses.map(course => {
+          // Extract time slot number from the timeslot_id
+          let slotNumber = 0;
+          const match = course.timeslot_id.match(/TS(\d+)/i);
+          if (match && match[1]) {
+            slotNumber = parseInt(match[1]);
+          }
+          
+          return {
+            ...course,
+            time_slot_number: slotNumber,
+            // Ensure day_of_week is properly formatted
+            day_of_week: normalizeDayName(course.day_of_week)
+          };
+        }),
+        ScheduledCourses: result.schedule.ScheduledCourses
+      },
+      schedule_id: result.schedule.schedule_id,
+      conflicts: result.conflicts
+    };
+    */
+
+    //return res.status(200).json(detailedSchedule);
+    return res.status(200).json(transformedResult);
+  } catch (error) {
+    console.error('Error retrieving active semester schedule:', error);
+    return res.status(500).json({ message: 'Failed to retrieve active semester schedule' });
+  }
+};
+
 // Get conflicts for a schedule
 exports.getScheduleConflicts = async (req, res) => {
   try {
@@ -218,13 +421,13 @@ exports.getScheduleConflicts = async (req, res) => {
     const conflicts = await Conflict.findAll({
       where: { schedule_id: scheduleId },
       include: [
+        { model: TimeSlot, attributes: ['name', 'start_time', 'end_time'] },
         { 
           model: ScheduledCourse, 
           through: ConflictCourse,
           include: [
-            { model: Course, attributes: ['course_name', 'is_core'] },
-            { model: Professor, attributes: ['first_name', 'last_name'] },
-            { model: TimeSlot, attributes: ['name', 'start_time', 'end_time', 'day_of_week'] }
+            { model: Course, attributes: ['course_id', 'course_name', 'is_core'] },
+            { model: Professor, attributes: ['professor_id', 'first_name', 'last_name'] }
           ]
         }
       ],
@@ -242,7 +445,7 @@ exports.getScheduleConflicts = async (req, res) => {
 exports.resolveConflict = async (req, res) => {
   try {
     const conflictId = req.params.conflictId;
-    const { resolution_notes } = req.body;
+    const { resolution_notes, action } = req.body;
     
     // Check if conflict exists
     const conflict = await Conflict.findByPk(conflictId);
@@ -254,19 +457,20 @@ exports.resolveConflict = async (req, res) => {
     await Conflict.update(
       { 
         is_resolved: true,
-        resolution_notes: resolution_notes || 'Conflict manually resolved by administrator'
+        resolution_notes: resolution_notes || `Conflict ${action === 'ACCEPT' ? 'accepted' : 'overridden'} by administrator`
       },
       { where: { conflict_id: conflictId } }
     );
     
     const updatedConflict = await Conflict.findByPk(conflictId, {
       include: [
+        { model: TimeSlot, attributes: ['name', 'start_time', 'end_time'] },
         { 
           model: ScheduledCourse, 
           through: ConflictCourse,
           include: [
-            { model: Course, attributes: ['course_name', 'is_core'] },
-            { model: Professor, attributes: ['first_name', 'last_name'] }
+            { model: Course, attributes: ['course_id', 'course_name', 'is_core'] },
+            { model: Professor, attributes: ['professor_id', 'first_name', 'last_name'] }
           ]
         }
       ]

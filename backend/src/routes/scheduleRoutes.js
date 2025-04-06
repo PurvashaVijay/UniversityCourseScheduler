@@ -26,8 +26,12 @@ router.post('/', authenticate, authorize('admin'), scheduleController.createSche
 router.put('/:id', authenticate, authorize('admin'), scheduleController.updateSchedule);
 router.delete('/:id', authenticate, authorize('admin'), scheduleController.deleteSchedule);
 
+
+
 // Additional routes
 router.get('/semester/:semesterId', authenticate, scheduleController.getSchedulesBySemester);
+// Add this route before the '/:id' route to avoid path conflicts
+router.get('/semester/:semesterId/active', authenticate, scheduleController.getActiveSemesterSchedule);
 router.get('/:id/conflicts', authenticate, scheduleController.getScheduleConflicts);
 router.put('/conflicts/:conflictId/resolve', authenticate, authorize('admin'), scheduleController.resolveConflict);
 
