@@ -37,7 +37,7 @@ import ProfessorList from './components/admin/professors/ProfessorList';
 import ProfessorDetails from './components/admin/professors/ProfessorDetails';
 
 // Admin components - ScheduleView
-import ScheduleView from './components/admin/schedule/ScheduleView';
+import ScheduleTab from './components/admin/schedule/ScheduleTab';
 // Create theme with University of Delaware colors
 const theme = createTheme({
   palette: {
@@ -105,8 +105,7 @@ const App: React.FC = () => {
               <Route path="professors/:id" element={<ProfessorDetails />} />
               
               {/* Active Schedule routes */}
-              <Route path="schedules" element={<ScheduleView />} />
-              <Route path="schedules/:id" element={<ScheduleView />} />
+              <Route path="schedules" element={<ScheduleTab />} />
             </Route>
             
             {/* Redirect root to login */}

@@ -15,16 +15,16 @@ exports.generateSchedule = async (req, res) => {
     
     // Generate schedule using the service
     const result = await schedulerService.generateSchedule(semester_id, name);
-
+    
     // Transform the scheduled courses into the format expected by the frontend
-    const formattedCourses = detailedSchedule.ScheduledCourses?.map(sc => {
+    const formattedCourses = result.schedule.ScheduledCourses?.map(sc => {
       // Extract the time slot number from the timeslot_id (e.g., "TS1-MON" -> 1)
       let slotNumber = 1;
       const timeSlotMatch = sc.timeslot_id.match(/TS(\d+)/);
       if (timeSlotMatch) {
         slotNumber = parseInt(timeSlotMatch[1]);
       }
-    
+      
       // Make sure day_of_week is properly formatted
       let dayOfWeek = sc.day_of_week || '';
       
@@ -61,7 +61,7 @@ exports.generateSchedule = async (req, res) => {
         duration_minutes: sc.Course?.duration_minutes
       };
     }) || [];
-
+    
     // Create a transformed result that includes both formats for compatibility
     const transformedResult = {
       message: 'Schedule generated successfully',
@@ -89,12 +89,33 @@ exports.generateSchedule = async (req, res) => {
       conflicts: result.conflicts
     };
     
-    return res.status(201).json(transformedResult);
+    // Function to remove circular references
+    const cleanCircularReferences = (obj) => {
+      const seen = new WeakSet();
+      return JSON.parse(JSON.stringify(obj, (key, value) => {
+        // Skip 'parent' properties to break circular references
+        if (key === 'parent') return undefined;
+        
+        // Handle other circular references
+        if (typeof value === 'object' && value !== null) {
+          if (seen.has(value)) {
+            return undefined; // Skip this value to avoid circular reference
+          }
+          seen.add(value);
+        }
+        return value;
+      }));
+    };
+    
+    // Apply the cleaner to our result
+    const cleanResult = cleanCircularReferences(transformedResult);
+    
+    return res.status(201).json(cleanResult);
   } catch (error) {
     console.error('Error in schedule generation:', error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       message: 'Failed to generate schedule',
-      error: error.message 
+      error: error.message
     });
   }
 };
