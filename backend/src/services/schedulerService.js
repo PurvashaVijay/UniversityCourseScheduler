@@ -147,13 +147,41 @@ class SchedulerService {
       console.log("Creating fallback schedule");
       const { courses, professors, timeSlots } = data;
       
-      // Simple greedy algorithm: Assign each course to the first available professor and time slot
+      // Create a map of which professors can teach which courses
+      const professorCourseMap = {};
+      data.professorCourses.forEach(pc => {
+        if (!professorCourseMap[pc.course_id]) {
+          professorCourseMap[pc.course_id] = [];
+        }
+        professorCourseMap[pc.course_id].push(pc.professor_id);
+      });
+
+      console.log(`Using ${data.professorCourses.length} professor-course relationships for fallback scheduling`);
+
+      // Simple greedy algorithm: Assign each course to a qualified professor and available time slot
       const assignedTimeSlots = new Set();
-      
+      const scheduledCourses = [];
+
       for (let i = 0; i < courses.length; i++) {
         const course = courses[i];
-        const profIndex = i % professors.length;
-        const professor = professors[profIndex];
+        
+        // Check if there are qualified professors for this course
+        const qualifiedProfessorIds = professorCourseMap[course.course_id] || [];
+        
+        // Skip courses with no qualified professors
+        if (qualifiedProfessorIds.length === 0) {
+          console.log(`Skipping course ${course.course_id} - no qualified professors`);
+          continue;
+        }
+        
+        // Find a qualified professor
+        const professorId = qualifiedProfessorIds[0];
+        const professor = professors.find(p => p.professor_id === professorId);
+        
+        if (!professor) {
+          console.log(`Couldn't find professor with ID ${professorId} for course ${course.course_id}`);
+          continue;
+        }
         
         // Find an available time slot
         let timeSlot = null;
@@ -176,20 +204,28 @@ class SchedulerService {
           dayOfWeek = timeSlot.day_of_week;
         }
         
-        // Create scheduled course
-        const scheduledCourseId = 'SC-' + uuidv4().substring(0, 8);
-        await ScheduledCourse.create({
-          scheduled_course_id: scheduledCourseId,
-          schedule_id: scheduleId,
-          course_id: course.course_id,
-          professor_id: professor.professor_id,
-          timeslot_id: timeSlot.timeslot_id,
-          day_of_week: dayOfWeek,
-          is_override: false
-        });
+        // Create scheduled course (only if we have a time slot)
+        if (timeSlot) {
+          const scheduledCourseId = 'SC-' + uuidv4().substring(0, 8);
+          await ScheduledCourse.create({
+            scheduled_course_id: scheduledCourseId,
+            schedule_id: scheduleId,
+            course_id: course.course_id,
+            professor_id: professor.professor_id,
+            timeslot_id: timeSlot.timeslot_id,
+            day_of_week: dayOfWeek,
+            is_override: false
+          });
+          scheduledCourses.push({
+            course_id: course.course_id,
+            professor_id: professor.professor_id
+          });
+        } else {
+          console.log(`No suitable time slot for course ${course.course_id} with professor ${professor.professor_id}`);
+        }
       }
       
-      console.log(`Created fallback schedule with ${courses.length} courses`);
+      console.log(`Created fallback schedule with ${scheduledCourses.length} courses out of ${courses.length} total courses`);
     } catch (error) {
       console.error('Error creating fallback schedule:', error);
     }
@@ -241,6 +277,19 @@ class SchedulerService {
         courseProgramMap[cp.course_id].push(cp.program_id);
       });
 
+      // Get professor-course relationships
+      const ProfessorCourse = require('../../app/models/ProfessorCourse');
+      const professorCourses = await ProfessorCourse.findAll();
+
+      // Format professor-course relationships for the Python scheduler
+      const formattedProfessorCourses = professorCourses.map(pc => ({
+        professor_id: pc.professor_id,
+        course_id: pc.course_id,
+        semester: pc.semester
+      }));
+    
+      console.log(`Found ${formattedProfessorCourses.length} professor-course relationships`);
+
       // Format courses with program IDs
       const formattedCourses = courses.map(course => {
         const courseJson = course.toJSON();
@@ -260,7 +309,8 @@ class SchedulerService {
         courses: formattedCourses,
         professors: professors.map(p => p.toJSON()),
         timeSlots: timeSlots.map(t => t.toJSON()),
-        professorAvailability: professorAvailability.map(pa => pa.toJSON())
+        professorAvailability: professorAvailability.map(pa => pa.toJSON()),
+        professorCourses: formattedProfessorCourses
       };
     } catch (error) {
       console.error('Error preparing scheduler input:', error);

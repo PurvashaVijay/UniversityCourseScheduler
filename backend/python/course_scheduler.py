@@ -24,6 +24,7 @@ class CourseScheduler:
         self.professors = data['professors']
         self.time_slots = data['timeSlots']
         self.professor_availability = data['professorAvailability']
+        self.professor_courses = data.get('professorCourses', [])  # Add this line
         self.schedule_id = data['scheduleId']
         
         # Create lookup dictionaries for faster access
@@ -39,6 +40,14 @@ class CourseScheduler:
                 self.availability_by_professor[prof_id] = []
             self.availability_by_professor[prof_id].append(avail)
 
+        # Create a map of which professors can teach which courses
+        self.professor_course_map = {}
+        for pc in self.professor_courses:
+            course_id = pc['course_id']
+            if course_id not in self.professor_course_map:
+                self.professor_course_map[course_id] = []
+            self.professor_course_map[course_id].append(pc['professor_id'])
+
     def build_model(self):
         """Build the constraint programming model"""
         # Create variables
@@ -51,6 +60,7 @@ class CourseScheduler:
         self.add_timeslot_duration_constraints()
         self.add_core_course_priority_constraints()
         self.add_cross_program_course_constraints()
+        self.add_professor_qualification_constraints()  # Add this line
         
         # Set objective function
         self.set_objective()
@@ -255,6 +265,23 @@ class CourseScheduler:
         # For courses with multiple sections, we would need section identifiers
         pass
     
+    def add_professor_qualification_constraints(self):
+        """Add constraints to ensure only qualified professors teach courses"""
+        for course in self.courses:
+            course_id = course['course_id']
+            # Get the list of professors qualified to teach this course
+            qualified_professors = self.professor_course_map.get(course_id, [])
+            # If there are no qualified professors, allow any professor (fallback)
+            if not qualified_professors:
+                self.model.Add(self.course_scheduled[course_id] == 0)
+                continue
+             # For each professor, add a constraint
+            for prof in self.professors:
+                prof_id = prof['professor_id']
+                # If this professor is not qualified, they cannot teach this course
+                if prof_id not in qualified_professors:
+                    self.model.Add(self.course_professor[course_id][prof_id] == 0)
+
     def set_objective(self):
         """Set the objective function for the model"""
         # Our primary objective is to maximize the number of scheduled courses
@@ -338,11 +365,32 @@ class CourseScheduler:
                 default_time_slot = self.time_slots[0]
                 default_time_id = default_time_slot['timeslot_id']
                 default_day = default_time_slot['day_of_week']
+
+                # Check if there are qualified professors for this course
+                qualified_professors = self.professor_course_map.get(course_id, [])
+
+                # Choose a qualified professor if available, otherwise random
+                if qualified_professors:
+                    professor_id = qualified_professors[0]
+                    random_prof = self.professor_dict[professor_id]
+
+                    # Create conflict description with reason
+                    conflict_description = f"No suitable time slot found for course {course['course_name']}"
+                    if not self.availability_by_professor.get(professor_id, []):
+                        conflict_description += " (Qualified professor has no availability)"
+                    else:
+                        conflict_description += " that matches duration and professor availability"
+
+                else:
+                    import random
+                    random_prof = random.choice(self.professors)
+                    professor_id = random_prof['professor_id']
                 
-                # Randomly select a professor (matching original logic)
-                import random
-                random_prof = random.choice(self.professors)
-                random_prof_id = random_prof['professor_id']
+                # Create conflict description with reason
+                conflict_description = f"No suitable time slot found for course {course['course_name']}"
+                if not qualified_professors:conflict_description += " (No qualified professors available)"
+                elif not self.availability_by_professor.get(qualified_professors[0], []):conflict_description += " (No availability for qualified professors)"
+                else:conflict_description += " that matches duration and professor availability"
                 
                 # Create conflict record
                 conflict = {
@@ -351,7 +399,7 @@ class CourseScheduler:
                     "timeslot_id": default_time_id,
                     "day_of_week": default_day,
                     "conflict_type": "NO_AVAILABLE_SLOT",
-                    "description": f"No suitable time slot found for course {course['course_name']} that matches duration and professor availability",
+                    "description": conflict_description,
                     "is_resolved": False
                 }
                 
@@ -361,7 +409,7 @@ class CourseScheduler:
                     "scheduled_course_id": scheduled_course_id,
                     "schedule_id": self.schedule_id,
                     "course_id": course_id,
-                    "professor_id": random_prof_id,
+                    "professor_id": professor_id,
                     "timeslot_id": default_time_id,
                     "day_of_week": default_day,
                     "is_override": False,
