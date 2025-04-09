@@ -22,10 +22,20 @@ import {
   Snackbar,
   ToggleButtonGroup,
   ToggleButton,
-  //Divider
+  IconButton,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  Button,
+  ListItemIcon,
+  ListItemText
 } from '@mui/material';
 import ViewWeekIcon from '@mui/icons-material/ViewWeek';
 import ViewDayIcon from '@mui/icons-material/ViewDay';
+import DeleteIcon from '@mui/icons-material/Delete';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import scheduleService, { Schedule, ScheduledCourse, TimeSlot } from '../../../services/scheduleService';
 import semesterService from '../../../services/semesterService';
 
@@ -41,9 +51,14 @@ type ViewMode = 'day' | 'week';
 interface ScheduleListProps {
   selectedScheduleId?: string;
   forceRefresh?: number; // A counter that when incremented will force a refresh
+  onScheduleDeleted?: () => void; // New callback for when a schedule is deleted
 }
 
-const ScheduleList: React.FC<ScheduleListProps> = ({ selectedScheduleId, forceRefresh = 0 }) => {
+const ScheduleList: React.FC<ScheduleListProps> = ({ 
+  selectedScheduleId, 
+  forceRefresh = 0,
+  onScheduleDeleted 
+}) => {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [semesters, setSemesters] = useState<Semester[]>([]);
   const [selectedSchedule, setSelectedSchedule] = useState<string>('');
@@ -59,6 +74,12 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ selectedScheduleId, forceRe
     message: string;
     severity: 'success' | 'error' | 'info' | 'warning';
   }>({ open: false, message: '', severity: 'info' });
+  
+  // New state for delete confirmation dialog
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState<boolean>(false);
+  const [scheduleToDelete, setScheduleToDelete] = useState<string>('');
+  const [scheduleNameToDelete, setScheduleNameToDelete] = useState<string>('');
+  const [deleteLoading, setDeleteLoading] = useState<boolean>(false);
 
   // Load semesters
   useEffect(() => {
@@ -196,6 +217,63 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ selectedScheduleId, forceRe
 
   const handleCloseSnackbar = () => {
     setSnackbar({ ...snackbar, open: false });
+  };
+
+  // New functions for schedule deletion
+  const handleDeleteClick = (scheduleId: string, scheduleName: string) => {
+    setScheduleToDelete(scheduleId);
+    setScheduleNameToDelete(scheduleName);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleCloseDeleteDialog = () => {
+    setDeleteDialogOpen(false);
+    setScheduleToDelete('');
+    setScheduleNameToDelete('');
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!scheduleToDelete) return;
+    
+    try {
+      setDeleteLoading(true);
+      await scheduleService.deleteSchedule(scheduleToDelete);
+      
+      setSnackbar({
+        open: true,
+        message: 'Schedule deleted successfully',
+        severity: 'success'
+      });
+      
+      // Remove the deleted schedule from state
+      const updatedSchedules = schedules.filter(s => s.schedule_id !== scheduleToDelete);
+      setSchedules(updatedSchedules);
+      
+      // Update selected schedule if the deleted one was selected
+      if (selectedSchedule === scheduleToDelete) {
+        if (updatedSchedules.length > 0) {
+          setSelectedSchedule(updatedSchedules[0].schedule_id);
+        } else {
+          setSelectedSchedule('');
+          setScheduledCourses([]);
+        }
+      }
+      
+      // Call the callback if provided
+      if (onScheduleDeleted) {
+        onScheduleDeleted();
+      }
+    } catch (error) {
+      console.error('Error deleting schedule:', error);
+      setSnackbar({
+        open: true,
+        message: 'Failed to delete schedule',
+        severity: 'error'
+      });
+    } finally {
+      setDeleteLoading(false);
+      handleCloseDeleteDialog();
+    }
   };
 
   // Helper function to get time slots for a specific day
@@ -436,6 +514,45 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ selectedScheduleId, forceRe
     );
   };
 
+  // Custom rendering of the MenuItem with a delete button
+  const renderScheduleMenuItem = (schedule: Schedule) => (
+    <Box 
+      sx={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'space-between',
+        width: '100%',
+        pr: 2
+      }}
+    >
+      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+        {schedule.is_final && (
+          <ListItemIcon sx={{ minWidth: 32 }}>
+            <CheckCircleIcon color="success" fontSize="small" />
+          </ListItemIcon>
+        )}
+        <ListItemText>
+          {schedule.name}
+        </ListItemText>
+      </Box>
+      
+      <IconButton
+        size="small"
+        color="error"
+        onClick={(event) => {
+          event.stopPropagation(); // Prevent the MenuItem from being selected
+          handleDeleteClick(schedule.schedule_id, schedule.name);
+        }}
+        sx={{ 
+          visibility: 'hidden', 
+          '.MuiMenuItem-root:hover &': { visibility: 'visible' } 
+        }}
+      >
+        <DeleteIcon fontSize="small" />
+      </IconButton>
+    </Box>
+  );
+
   return (
     <Box>
       <Card sx={{ mb: 4, boxShadow: 2 }}>
@@ -472,6 +589,21 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ selectedScheduleId, forceRe
                 label="Schedule"
                 onChange={handleScheduleChange}
                 disabled={loading || schedules.length === 0}
+                MenuProps={{
+                  PaperProps: {
+                    sx: { 
+                      maxHeight: 300,
+                      '& .MuiMenuItem-root': {
+                        padding: '4px 16px',
+                        '&:hover': {
+                          '& .MuiIconButton-root': {
+                            visibility: 'visible'
+                          }
+                        }
+                      }
+                    }
+                  }
+                }}
               >
                 {schedules.length === 0 ? (
                   <MenuItem value="">
@@ -480,7 +612,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ selectedScheduleId, forceRe
                 ) : (
                   schedules.map((schedule) => (
                     <MenuItem key={schedule.schedule_id} value={schedule.schedule_id}>
-                      {schedule.name} {schedule.is_final && "(Final)"}
+                      {renderScheduleMenuItem(schedule)}
                     </MenuItem>
                   ))
                 )}
@@ -563,6 +695,43 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ selectedScheduleId, forceRe
           {snackbar.message}
         </Alert>
       </Snackbar>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={handleCloseDeleteDialog}
+        aria-labelledby="alert-dialog-title"
+        aria-describedby="alert-dialog-description"
+      >
+        <DialogTitle id="alert-dialog-title">
+          {"Delete Schedule"}
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText id="alert-dialog-description">
+            Are you sure you want to delete the schedule "<strong>{scheduleNameToDelete}</strong>"? 
+            This action cannot be undone and will permanently remove all scheduled courses 
+            associated with this schedule.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={handleCloseDeleteDialog} 
+            color="inherit"
+            disabled={deleteLoading}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleConfirmDelete} 
+            color="error" 
+            autoFocus
+            disabled={deleteLoading}
+            startIcon={deleteLoading ? <CircularProgress size={20} /> : <DeleteIcon />}
+          >
+            {deleteLoading ? 'Deleting...' : 'Delete Schedule'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
