@@ -192,6 +192,47 @@ export const generateSchedule = async (semesterId: string, name: string): Promis
   }
 };
 
+// Delete a schedule
+export const deleteSchedule = async (scheduleId: string): Promise<{ success: boolean; message: string }> => {
+  try {
+    const token = authService.getToken();
+    
+    // Add the console log here, before the fetch call
+    console.log(`Sending DELETE request to ${API_URL}/schedules/${scheduleId}`);
+    
+    const response = await fetch(`${API_URL}/schedules/${scheduleId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to delete schedule');
+    }
+    
+    // Handle 204 No Content or empty responses
+    if (response.status === 204 || response.headers.get('content-length') === '0') {
+      return {
+        success: true,
+        message: 'Schedule deleted successfully'
+      };
+    }
+    
+    const data = await response.json();
+    return {
+      success: true,
+      message: data.message || 'Schedule deleted successfully'
+    };
+  } catch (error) {
+    console.error(`Error deleting schedule ${scheduleId}:`, error);
+    throw error;
+  }
+};
+
 // Get conflicts for a schedule
 export const getScheduleConflicts = async (scheduleId: string): Promise<Conflict[]> => {
   try {
@@ -264,6 +305,7 @@ const scheduleService = {
   getSchedulesBySemester,
   getScheduledCourses,
   generateSchedule,
+  deleteSchedule,
   getScheduleConflicts,
   getAllTimeSlots,
   getTimeSlotsByDay
