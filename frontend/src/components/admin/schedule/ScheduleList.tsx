@@ -51,13 +51,15 @@ type ViewMode = 'day' | 'week';
 interface ScheduleListProps {
   selectedScheduleId?: string;
   forceRefresh?: number; // A counter that when incremented will force a refresh
-  onScheduleDeleted?: () => void; // New callback for when a schedule is deleted
+  onScheduleDeleted?: () => void; // Callback for when a schedule is deleted
+  onScheduleSelected?: (scheduleId: string) => void; // Callback for when a schedule is selected
 }
 
-const ScheduleList: React.FC<ScheduleListProps> = ({ 
-  selectedScheduleId, 
+const ScheduleList: React.FC<ScheduleListProps> = ({
+  selectedScheduleId,
   forceRefresh = 0,
-  onScheduleDeleted 
+  onScheduleDeleted,
+  onScheduleSelected
 }) => {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [semesters, setSemesters] = useState<Semester[]>([]);
@@ -74,7 +76,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
     message: string;
     severity: 'success' | 'error' | 'info' | 'warning';
   }>({ open: false, message: '', severity: 'info' });
-  
+ 
   // New state for delete confirmation dialog
   const [deleteDialogOpen, setDeleteDialogOpen] = useState<boolean>(false);
   const [scheduleToDelete, setScheduleToDelete] = useState<string>('');
@@ -87,10 +89,10 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
       try {
         const data = await semesterService.getAllSemesters();
         setSemesters(data);
-        
+       
         if (data.length > 0) {
           // Select the most recent semester by default
-          const sortedSemesters = [...data].sort((a, b) => 
+          const sortedSemesters = [...data].sort((a, b) =>
             new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
           );
           setSelectedSemester(sortedSemesters[0].semester_id);
@@ -112,16 +114,16 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
   useEffect(() => {
     const fetchSchedules = async () => {
       if (!selectedSemester) return;
-      
+     
       try {
         setLoading(true);
         console.log('Fetching schedules for semester:', selectedSemester);
         console.log('Current forceRefresh value:', forceRefresh);
-        
+       
         const data = await scheduleService.getSchedulesBySemester(selectedSemester);
         console.log('Fetched schedules:', data);
         setSchedules(data);
-        
+       
         // If there's a selected schedule ID from props, use it
         if (selectedScheduleId && data.some(s => s.schedule_id === selectedScheduleId)) {
           console.log('Setting selected schedule to selectedScheduleId:', selectedScheduleId);
@@ -129,6 +131,10 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
         } else if (data.length > 0) {
           console.log('Setting selected schedule to first schedule:', data[0].schedule_id);
           setSelectedSchedule(data[0].schedule_id);
+          // Call the callback to notify parent of selection
+          if (onScheduleSelected) {
+            onScheduleSelected(data[0].schedule_id);
+          }
         } else {
           console.log('No schedules found, clearing selected schedule');
           setSelectedSchedule('');
@@ -151,9 +157,18 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
     console.log('Selected semester:', selectedSemester);
     console.log('Selected schedule ID from props:', selectedScheduleId);
     console.log('ForceRefresh value:', forceRefresh);
-    
+   
     fetchSchedules();
-  }, [selectedSemester, selectedScheduleId, forceRefresh]);
+  }, [selectedSemester, selectedScheduleId, forceRefresh, onScheduleSelected]);
+
+  // Auto-select the first schedule when there's only one and notify parent
+  useEffect(() => {
+    if (schedules.length === 1 && schedules[0].schedule_id && onScheduleSelected) {
+      console.log("Auto-selecting the only schedule:", schedules[0].schedule_id);
+      setSelectedSchedule(schedules[0].schedule_id);
+      onScheduleSelected(schedules[0].schedule_id);
+    }
+  }, [schedules, onScheduleSelected]);
 
   // Load all time slots
   useEffect(() => {
@@ -178,11 +193,11 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
   useEffect(() => {
     const fetchScheduledCourses = async () => {
       if (!selectedSchedule) return;
-      
+     
       try {
         setLoadingCourses(true);
         console.log('Fetching scheduled courses for schedule:', selectedSchedule);
-        
+       
         const data = await scheduleService.getScheduledCourses(selectedSchedule);
         console.log('Fetched scheduled courses:', data.length);
         setScheduledCourses(data);
@@ -206,7 +221,14 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
   };
 
   const handleScheduleChange = (event: any) => {
-    setSelectedSchedule(event.target.value);
+    const newScheduleId = event.target.value;
+    console.log("Schedule selected manually:", newScheduleId);
+    setSelectedSchedule(newScheduleId);
+    
+    if (onScheduleSelected && newScheduleId) {
+      console.log("Calling onScheduleSelected with:", newScheduleId);
+      onScheduleSelected(newScheduleId);
+    }
   };
 
   const handleViewModeChange = (event: React.MouseEvent<HTMLElement>, newViewMode: ViewMode | null) => {
@@ -234,31 +256,35 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
 
   const handleConfirmDelete = async () => {
     if (!scheduleToDelete) return;
-    
+   
     try {
       setDeleteLoading(true);
       await scheduleService.deleteSchedule(scheduleToDelete);
-      
+     
       setSnackbar({
         open: true,
         message: 'Schedule deleted successfully',
         severity: 'success'
       });
-      
+     
       // Remove the deleted schedule from state
       const updatedSchedules = schedules.filter(s => s.schedule_id !== scheduleToDelete);
       setSchedules(updatedSchedules);
-      
+     
       // Update selected schedule if the deleted one was selected
       if (selectedSchedule === scheduleToDelete) {
         if (updatedSchedules.length > 0) {
           setSelectedSchedule(updatedSchedules[0].schedule_id);
+          // Notify parent of new selection
+          if (onScheduleSelected) {
+            onScheduleSelected(updatedSchedules[0].schedule_id);
+          }
         } else {
           setSelectedSchedule('');
           setScheduledCourses([]);
         }
       }
-      
+     
       // Call the callback if provided
       if (onScheduleDeleted) {
         onScheduleDeleted();
@@ -299,7 +325,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
     // Map to store unique time slots by time range
     // Key format: "start_time-end_time"
     const uniqueSlots = new Map<string, TimeSlot[]>();
-    
+   
     // Group time slots by time range (regardless of day)
     timeSlots.forEach(slot => {
       const timeKey = `${slot.start_time}-${slot.end_time}`;
@@ -308,7 +334,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
       }
       uniqueSlots.get(timeKey)?.push(slot);
     });
-    
+   
     // Convert the map to array and sort by start time
     return Array.from(uniqueSlots.entries())
       .map(([_, slots]) => slots[0]) // Take the first slot from each group
@@ -331,24 +357,24 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
   const renderScheduleCell = (timeslotId: string, day: string) => {
     // Early return if timeslotId is undefined (may happen in week view for some combinations)
     if (!timeslotId) return <Box sx={{ height: '100%', minHeight: '60px' }}></Box>;
-    
+   
     const courses = getCoursesForTimeSlot(timeslotId, day);
-    
+   
     if (courses.length === 0) {
       return <Box sx={{ height: '100%', minHeight: '60px' }}></Box>;
     }
-    
+   
     return (
       <Box sx={{ p: 1 }}>
         {courses.map((course, index) => {
           // Safely check if course has is_core property through the course object
-          const isCoreClass = course.course && 'is_core' in course.course ? 
+          const isCoreClass = course.course && 'is_core' in course.course ?
             Boolean(course.course.is_core) : false;
-            
+           
           return (
-            <Box 
+            <Box
               key={course.scheduled_course_id}
-              sx={{ 
+              sx={{
                 mb: index !== courses.length - 1 ? 1 : 0,
                 p: 1,
                 borderRadius: 1,
@@ -362,8 +388,8 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
                 Prof: {course.professor?.first_name || ''} {course.professor?.last_name || ''}
               </Typography>
               {course.is_override && (
-                <Chip 
-                  label="Manual Override" 
+                <Chip
+                  label="Manual Override"
                   size="small"
                   color="warning"
                   sx={{ mt: 0.5, fontSize: '0.7rem' }}
@@ -382,20 +408,20 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
       <Box sx={{ mt: 2 }}>
         {DAYS_OF_WEEK.map((day, dayIndex) => {
           const dayTimeSlots = getTimeSlotsForDay(day);
-          
+         
           if (dayTimeSlots.length === 0) return null;
-          
+         
           return (
             <Box key={day} sx={{ mb: 4 }}>
-              <Typography variant="h6" gutterBottom sx={{ 
-                borderBottom: '2px solid #00539F', 
+              <Typography variant="h6" gutterBottom sx={{
+                borderBottom: '2px solid #00539F',
                 pb: 1,
                 color: '#00539F',
                 fontWeight: 'bold'
               }}>
                 {day}
               </Typography>
-              
+             
               <TableContainer component={Paper} sx={{ boxShadow: 2 }}>
                 <Table size="small">
                   <TableHead>
@@ -406,7 +432,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
                   </TableHead>
                   <TableBody>
                     {dayTimeSlots.map((slot, index) => (
-                      <TableRow 
+                      <TableRow
                         key={slot.timeslot_id}
                         sx={{
                           borderBottom: index < dayTimeSlots.length - 1 ? '1px solid #e0e0e0' : 'none',
@@ -429,7 +455,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
                   </TableBody>
                 </Table>
               </TableContainer>
-              
+             
               {/* Add space between days */}
               {dayIndex < DAYS_OF_WEEK.length - 1 && (
                 <Box sx={{ height: '30px' }} />
@@ -444,7 +470,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
   // Render the new week view
   const renderWeekView = () => {
     const uniqueTimeSlots = getUniqueTimeSlots();
-    
+   
     return (
       <Box sx={{ mt: 2 }}>
         <TableContainer component={Paper} sx={{ boxShadow: 2 }}>
@@ -453,11 +479,11 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
               <TableRow sx={{ bgcolor: '#f5f5f5' }}>
                 <TableCell width="15%" sx={{ borderBottom: '2px solid #00539F' }}>Time Slot</TableCell>
                 {DAYS_OF_WEEK.map(day => (
-                  <TableCell 
-                    key={day} 
-                    align="center" 
+                  <TableCell
+                    key={day}
+                    align="center"
                     width={`${85/DAYS_OF_WEEK.length}%`}
-                    sx={{ 
+                    sx={{
                       borderBottom: '2px solid #00539F',
                       color: '#00539F',
                       fontWeight: 'bold'
@@ -470,8 +496,8 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
             </TableHead>
             <TableBody>
               {uniqueTimeSlots.map((timeSlot, index) => (
-                <TableRow 
-                  key={`${timeSlot.start_time}-${timeSlot.end_time}`}
+                <TableRow
+                 key={`${timeSlot.start_time}-${timeSlot.end_time}`}
                   sx={{
                     borderBottom: index < uniqueTimeSlots.length - 1 ? '1px solid #e0e0e0' : 'none',
                     '&:nth-of-type(odd)': { bgcolor: '#fafafa' }
@@ -485,18 +511,18 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
                       {timeSlot.start_time.substring(0, 5)} - {timeSlot.end_time.substring(0, 5)}
                     </Typography>
                   </TableCell>
-                  
+                 
                   {DAYS_OF_WEEK.map((day, dayIndex) => {
                     const timeslotId = getTimeslotIdForTimeAndDay(
-                      timeSlot.start_time, 
-                      timeSlot.end_time, 
+                      timeSlot.start_time,
+                      timeSlot.end_time,
                       day
                     );
-                    
+                   
                     return (
-                      <TableCell 
-                        key={`${timeSlot.start_time}-${day}`} 
-                        sx={{ 
+                      <TableCell
+                        key={`${timeSlot.start_time}-${day}`}
+                        sx={{
                           minWidth: '150px',
                           borderRight: dayIndex < DAYS_OF_WEEK.length - 1 ? '1px solid #e0e0e0' : 'none'
                         }}
@@ -516,10 +542,10 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
 
   // Custom rendering of the MenuItem with a delete button
   const renderScheduleMenuItem = (schedule: Schedule) => (
-    <Box 
-      sx={{ 
-        display: 'flex', 
-        alignItems: 'center', 
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
         justifyContent: 'space-between',
         width: '100%',
         pr: 2
@@ -535,7 +561,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
           {schedule.name}
         </ListItemText>
       </Box>
-      
+     
       <IconButton
         size="small"
         color="error"
@@ -543,9 +569,9 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
           event.stopPropagation(); // Prevent the MenuItem from being selected
           handleDeleteClick(schedule.schedule_id, schedule.name);
         }}
-        sx={{ 
-          visibility: 'hidden', 
-          '.MuiMenuItem-root:hover &': { visibility: 'visible' } 
+        sx={{
+          visibility: 'hidden',
+          '.MuiMenuItem-root:hover &': { visibility: 'visible' }
         }}
       >
         <DeleteIcon fontSize="small" />
@@ -560,7 +586,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
           <Typography variant="h6" gutterBottom>
             Course Schedule
           </Typography>
-          
+         
           <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
             <FormControl fullWidth sx={{ flex: 1 }}>
               <InputLabel id="semester-select-label">Semester</InputLabel>
@@ -579,7 +605,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
                 ))}
               </Select>
             </FormControl>
-            
+           
             <FormControl fullWidth sx={{ flex: 1 }}>
               <InputLabel id="schedule-select-label">Schedule</InputLabel>
               <Select
@@ -591,7 +617,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
                 disabled={loading || schedules.length === 0}
                 MenuProps={{
                   PaperProps: {
-                    sx: { 
+                    sx: {
                       maxHeight: 300,
                       '& .MuiMenuItem-root': {
                         padding: '4px 16px',
@@ -618,7 +644,6 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
                 )}
               </Select>
             </FormControl>
-
             <ToggleButtonGroup
               value={viewMode}
               exclusive
@@ -638,7 +663,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
               </ToggleButton>
             </ToggleButtonGroup>
           </Box>
-          
+         
           <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Box>
               <Typography variant="body2" color="text.secondary">
@@ -659,7 +684,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
                 </Box>
               </Box>
             </Box>
-            
+           
             {scheduledCourses.length > 0 && (
               <Typography variant="body2">
                 {scheduledCourses.length} courses scheduled
@@ -668,7 +693,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
           </Box>
         </CardContent>
       </Card>
-      
+     
       {loadingCourses ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
           <CircularProgress />
@@ -684,7 +709,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
       ) : (
         viewMode === 'day' ? renderDayView() : renderWeekView()
       )}
-      
+     
       <Snackbar
         open={snackbar.open}
         autoHideDuration={6000}
@@ -695,7 +720,6 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
           {snackbar.message}
         </Alert>
       </Snackbar>
-
       {/* Delete Confirmation Dialog */}
       <Dialog
         open={deleteDialogOpen}
@@ -708,22 +732,22 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
         </DialogTitle>
         <DialogContent>
           <DialogContentText id="alert-dialog-description">
-            Are you sure you want to delete the schedule "<strong>{scheduleNameToDelete}</strong>"? 
-            This action cannot be undone and will permanently remove all scheduled courses 
+            Are you sure you want to delete the schedule "<strong>{scheduleNameToDelete}</strong>"?
+            This action cannot be undone and will permanently remove all scheduled courses
             associated with this schedule.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button 
-            onClick={handleCloseDeleteDialog} 
+          <Button
+            onClick={handleCloseDeleteDialog}
             color="inherit"
             disabled={deleteLoading}
           >
             Cancel
           </Button>
-          <Button 
-            onClick={handleConfirmDelete} 
-            color="error" 
+          <Button
+            onClick={handleConfirmDelete}
+            color="error"
             autoFocus
             disabled={deleteLoading}
             startIcon={deleteLoading ? <CircularProgress size={20} /> : <DeleteIcon />}

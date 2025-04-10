@@ -35,6 +35,6 @@ router.get('/semester/:semesterId/active', authenticate, scheduleController.getA
 router.get('/:id/conflicts', authenticate, scheduleController.getScheduleConflicts);
 router.put('/conflicts/:conflictId/resolve', authenticate, authorize('admin'), scheduleController.resolveConflict);
 
-
+router.put('/conflicts/:conflictId/revert', authenticate, authorize('admin'), scheduleController.revertConflictResolution);
 
 module.exports = router;

@@ -72,7 +72,13 @@ export interface Conflict {
     start_time: string;
     end_time: string;
   };
-  scheduled_courses?: ScheduledCourse[];
+  scheduled_courses?: {
+    scheduled_course_id: string;
+    course_id: string;
+    course_name?: string;
+    professor_id?: string;
+    professor_name?: string;
+  }[];
 }
 
 // Get all schedules
@@ -255,6 +261,38 @@ export const getScheduleConflicts = async (scheduleId: string): Promise<Conflict
   }
 };
 
+// Resolve a conflict
+export const resolveConflict = async (
+  conflictId: string, 
+  resolutionData: {
+    is_resolved: boolean;
+    resolution_notes: string;
+    action: 'ACCEPT' | 'OVERRIDE';
+  }
+): Promise<Conflict> => {
+  try {
+    const token = authService.getToken();
+    
+    const response = await fetch(`${API_URL}/schedules/conflicts/${conflictId}/resolve`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(resolutionData)
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to resolve conflict');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error(`Error resolving conflict ${conflictId}:`, error);
+    throw error;
+  }
+};
+
 // Get all timeslots
 export const getAllTimeSlots = async (): Promise<TimeSlot[]> => {
   try {
@@ -299,6 +337,36 @@ export const getTimeSlotsByDay = async (day: string): Promise<TimeSlot[]> => {
   }
 };
 
+export const revertConflictResolution = async (
+  conflictId: string,
+  revertData: {
+    is_resolved: boolean;
+    resolution_notes: string;
+  }
+): Promise<Conflict> => {
+  try {
+    const token = authService.getToken();
+    
+    const response = await fetch(`${API_URL}/schedules/conflicts/${conflictId}/revert`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(revertData)
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to revert conflict resolution');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error(`Error reverting conflict resolution ${conflictId}:`, error);
+    throw error;
+  }
+};
+
 const scheduleService = {
   getAllSchedules,
   getScheduleById,
@@ -307,6 +375,8 @@ const scheduleService = {
   generateSchedule,
   deleteSchedule,
   getScheduleConflicts,
+  resolveConflict,
+  revertConflictResolution,
   getAllTimeSlots,
   getTimeSlotsByDay
 };

@@ -482,3 +482,44 @@ exports.resolveConflict = async (req, res) => {
     return res.status(500).json({ message: 'Failed to resolve conflict' });
   }
 };
+
+exports.revertConflictResolution = async (req, res) => {
+  try {
+    const conflictId = req.params.conflictId;
+    const { resolution_notes } = req.body;
+    
+    // Check if conflict exists
+    const conflict = await Conflict.findByPk(conflictId);
+    if (!conflict) {
+      return res.status(404).json({ message: 'Conflict not found' });
+    }
+    
+    // Update conflict to mark as unresolved
+    await Conflict.update(
+      {
+        is_resolved: false,
+        resolution_notes: resolution_notes || 'Resolution reverted by administrator'
+      },
+      { where: { conflict_id: conflictId } }
+    );
+    
+    const updatedConflict = await Conflict.findByPk(conflictId, {
+      include: [
+        { model: TimeSlot, attributes: ['name', 'start_time', 'end_time'] },
+        {
+          model: ScheduledCourse,
+          through: ConflictCourse,
+          include: [
+            { model: Course, attributes: ['course_id', 'course_name', 'is_core'] },
+            { model: Professor, attributes: ['professor_id', 'first_name', 'last_name'] }
+          ]
+        }
+      ]
+    });
+    
+    return res.status(200).json(updatedConflict);
+  } catch (error) {
+    console.error('Error reverting conflict resolution:', error);
+    return res.status(500).json({ message: 'Failed to revert conflict resolution' });
+  }
+};
