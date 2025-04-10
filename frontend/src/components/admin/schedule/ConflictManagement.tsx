@@ -23,7 +23,11 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
-  TextField
+  TextField,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Select
 } from '@mui/material';
 import WarningIcon from '@mui/icons-material/Warning';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -45,7 +49,14 @@ const ConflictManagement: React.FC<ConflictManagementProps> = ({ scheduleId, onC
   const [selectedConflict, setSelectedConflict] = useState<Conflict | null>(null);
   const [resolutionNotes, setResolutionNotes] = useState<string>('');
   const [dialogOpen, setDialogOpen] = useState<boolean>(false);
-  const [resolutionType, setResolutionType] = useState<'ACCEPT' | 'OVERRIDE' | 'REVERT'>('ACCEPT');
+  type ResolutionType = 'ACCEPT' | 'OVERRIDE' | 'REVERT';
+  const [resolutionType, setResolutionType] = useState<ResolutionType>('ACCEPT');
+  const [selectedCourseToMove, setSelectedCourseToMove] = useState<string>('');
+  const [selectedNewTimeSlot, setSelectedNewTimeSlot] = useState<string>('');
+  const [availableTimeSlots, setAvailableTimeSlots] = useState<any[]>([]);
+  const [loadingTimeSlots, setLoadingTimeSlots] = useState<boolean>(false);
+  const [selectedDay, setSelectedDay] = useState<string>('');
+  const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
@@ -89,100 +100,119 @@ const ConflictManagement: React.FC<ConflictManagementProps> = ({ scheduleId, onC
   const handleResolveClick = (conflict: Conflict, type: 'ACCEPT' | 'OVERRIDE') => {
     setSelectedConflict(conflict);
     setResolutionType(type);
+    setSelectedCourseToMove('');
+    setSelectedNewTimeSlot('');
     
     // Set default resolution notes based on type
     setResolutionNotes(type === 'ACCEPT'
       ? 'Conflict accepted as is.'
       : 'Schedule will be modified to resolve this conflict.');
     
-    setDialogOpen(true);
-  };
-
-  // Handle revert button click for already resolved conflicts
-  const handleRevertClick = (conflict: Conflict) => {
-    setSelectedConflict(conflict);
-    setResolutionType('REVERT');
-    setResolutionNotes('Reverting previously resolved conflict for reconsideration.');
-    setDialogOpen(true);
-  };
-
-  // Handle conflict resolution submission using scheduleService
-  const handleResolveConflict = async () => {
-    if (!selectedConflict) return;
+    // If override, fetch available time slots
+    if (type === 'OVERRIDE') {
+      fetchAvailableTimeSlots();
+    }
     
-    try {
-      setResolving(selectedConflict.conflict_id);
+    setDialogOpen(true);
+  };
+  // Handle revert button click for already resolved conflicts
+// Update the handleRevertClick function in ConflictManagement.tsx
+const handleRevertClick = (conflict: Conflict) => {
+  setSelectedConflict(conflict);
+  setResolutionType('REVERT');
+  setResolutionNotes('Reverting previously resolved conflict for reconsideration.');
+  setDialogOpen(true);
+};
+
+// Modify handleResolveConflict to handle reverting
+const handleResolveConflict = async () => {
+  if (!selectedConflict) return;
+  
+  try {
+    setResolving(selectedConflict.conflict_id);
+    
+    if (resolutionType === 'REVERT') {
+      // Reverting a previously resolved conflict
+      await scheduleService.revertConflictResolution(
+        selectedConflict.conflict_id,
+        {
+          is_resolved: false,
+          resolution_notes: resolutionNotes
+        }
+      );
       
-      if (resolutionType === 'REVERT') {
-        // Reverting a previously resolved conflict
-        await scheduleService.revertConflictResolution(
-          selectedConflict.conflict_id,
-          {
-            is_resolved: false,
-            resolution_notes: resolutionNotes
-          }
-        );
-        
-        // Update local state
-        setConflicts(conflicts.map(conflict => 
-          conflict.conflict_id === selectedConflict.conflict_id 
-            ? { ...conflict, is_resolved: false, resolution_notes: resolutionNotes } 
-            : conflict
-        ));
-        
-        setSnackbar({
-          open: true,
-          message: 'Conflict resolution reverted successfully',
-          severity: 'success'
-        });
-      } else {
-        // Regular resolution (Accept or Override)
-        await scheduleService.resolveConflict(
-          selectedConflict.conflict_id,
-          {
-            is_resolved: true,
-            resolution_notes: resolutionNotes,
-            action: resolutionType
-          }
-        );
-        
-        // Update local state
-        setConflicts(conflicts.map(conflict => 
-          conflict.conflict_id === selectedConflict.conflict_id 
-            ? { ...conflict, is_resolved: true, resolution_notes: resolutionNotes } 
-            : conflict
-        ));
-        
-        setSnackbar({
-          open: true,
-          message: `Conflict ${resolutionType === 'ACCEPT' ? 'accepted' : 'overridden'} successfully`,
-          severity: 'success'
-        });
-      }
+      // Update local state
+      setConflicts(conflicts.map(conflict => 
+        conflict.conflict_id === selectedConflict.conflict_id 
+          ? { ...conflict, is_resolved: false, resolution_notes: resolutionNotes } 
+          : conflict
+      ));
       
-      if (onConflictResolved) {
-        onConflictResolved();
-      }
-    } catch (error) {
-      console.error('Error processing conflict:', error);
       setSnackbar({
         open: true,
-        message: `Failed to ${resolutionType === 'REVERT' ? 'revert' : 'resolve'} conflict`,
-        severity: 'error'
+        message: 'Conflict resolution reverted successfully',
+        severity: 'success'
       });
-    } finally {
-      setResolving(null);
-      setDialogOpen(false);
+    } else {
+      // Regular resolution (Accept or Override)
+      const resolutionData: any = {
+        is_resolved: true,
+        resolution_notes: resolutionNotes,
+        action: resolutionType
+      };
+      
+      // For override, include course and timeslot info
+      if (resolutionType === 'OVERRIDE' && selectedCourseToMove && selectedNewTimeSlot) {
+        resolutionData.scheduled_course_id = selectedCourseToMove;
+        resolutionData.new_timeslot_id = selectedNewTimeSlot;
+      }
+      
+      await scheduleService.resolveConflict(
+        selectedConflict.conflict_id,
+        resolutionData
+      );
+      
+      // Update local state
+      setConflicts(conflicts.map(conflict => 
+        conflict.conflict_id === selectedConflict.conflict_id 
+          ? { ...conflict, is_resolved: true, resolution_notes: resolutionNotes } 
+          : conflict
+      ));
+      
+      setSnackbar({
+        open: true,
+        message: `Conflict ${resolutionType === 'ACCEPT' ? 'accepted' : 'overridden'} successfully`,
+        severity: 'success'
+      });
     }
-  };
+    
+    if (onConflictResolved) {
+      onConflictResolved();
+    }
+  } catch (error) {
+    console.error('Error processing conflict:', error);
+    setSnackbar({
+      open: true,
+      message: `Failed to ${resolutionType === 'REVERT' ? 'revert' : 'resolve'} conflict`,
+      severity: 'error'
+    });
+  } finally {
+    setResolving(null);
+    setDialogOpen(false);
+    setSelectedCourseToMove('');
+    setSelectedNewTimeSlot('');
+  }
+};
 
   // Close the resolution dialog
   const handleCloseDialog = () => {
     setDialogOpen(false);
     setSelectedConflict(null);
     setResolutionNotes('');
+    setSelectedCourseToMove('');
+    setSelectedNewTimeSlot('');
+    setSelectedDay(''); // Reset selected day
   };
-
   // Close the snackbar
   const handleCloseSnackbar = () => {
     setSnackbar({ ...snackbar, open: false });
@@ -229,6 +259,23 @@ const ConflictManagement: React.FC<ConflictManagementProps> = ({ scheduleId, onC
         return 'No Available Slot';
       default:
         return type.replace(/_/g, ' ');
+    }
+  };
+  // Fetch available time solts
+  const fetchAvailableTimeSlots = async () => {
+    try {
+      setLoadingTimeSlots(true);
+      const timeSlots = await scheduleService.getAllTimeSlots();
+      setAvailableTimeSlots(timeSlots);
+    } catch (error) {
+      console.error('Error fetching time slots:', error);
+      setSnackbar({
+        open: true,
+        message: 'Failed to load time slots',
+        severity: 'error'
+      });
+    } finally {
+      setLoadingTimeSlots(false);
     }
   };
 
@@ -405,73 +452,141 @@ const ConflictManagement: React.FC<ConflictManagementProps> = ({ scheduleId, onC
       </CardContent>
       
       <Dialog open={dialogOpen} onClose={handleCloseDialog}>
-        <DialogTitle>
-          {resolutionType === 'ACCEPT' ? 'Accept Conflict' : 
-           resolutionType === 'OVERRIDE' ? 'Override Conflict' : 
-           'Revert Resolution'}
-        </DialogTitle>
-        <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
-            {selectedConflict?.description}
-          </DialogContentText>
-          <Typography variant="subtitle2" gutterBottom>
-            Action:
-            <Chip
-              label={
-                resolutionType === 'ACCEPT' ? 'Accept As Is' : 
-                resolutionType === 'OVERRIDE' ? 'Override Schedule' :
-                'Revert Resolution'
-              }
-              color={
-                resolutionType === 'ACCEPT' ? 'primary' : 
-                resolutionType === 'OVERRIDE' ? 'secondary' :
-                'warning'
-              }
-              size="small"
-              sx={{ ml: 1 }}
-            />
+  <DialogTitle>
+    {resolutionType === 'ACCEPT' ? 'Accept Conflict' : 
+     resolutionType === 'OVERRIDE' ? 'Override Conflict' : 
+     'Revert Resolution'}
+  </DialogTitle>
+  <DialogContent>
+    <DialogContentText sx={{ mb: 2 }}>
+      {selectedConflict?.description}
+    </DialogContentText>
+    
+    {/* Show conflicting courses */}
+    <Typography variant="subtitle2" gutterBottom>
+      Conflicting Courses:
+    </Typography>
+    <Box sx={{ mb: 2 }}>
+      {selectedConflict?.scheduled_courses?.map(course => (
+        <Box key={course.scheduled_course_id} sx={{ mb: 1, p: 1, border: '1px solid #eee', borderRadius: 1 }}>
+          <Typography variant="body2" fontWeight="bold">
+            {course.course_id} - {course.course_name || 'Unknown Course'}
           </Typography>
-          <TextField
-            autoFocus
-            label="Resolution Notes"
-            fullWidth
-            multiline
-            rows={4}
-            value={resolutionNotes}
-            onChange={(e) => setResolutionNotes(e.target.value)}
-            placeholder={
-              resolutionType === 'ACCEPT' ? "Explain why this conflict is acceptable (e.g., temporary situation, special arrangement)" :
-              resolutionType === 'OVERRIDE' ? "Explain how this conflict should be overridden (e.g., move to a different time slot, assign different professor)" :
-              "Explain why you're reverting the previous resolution"
-            }
-            sx={{ mt: 2 }}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseDialog} color="inherit">Cancel</Button>
-          <Button
-            onClick={handleResolveConflict}
-            color={
-              resolutionType === 'ACCEPT' ? 'primary' : 
-              resolutionType === 'OVERRIDE' ? 'secondary' :
-              'warning'
-            }
-            disabled={!resolutionNotes.trim()}
-            startIcon={
-              resolutionType === 'ACCEPT' ? <ThumbUpIcon /> : 
-              resolutionType === 'OVERRIDE' ? <SettingsIcon /> :
-              <RestoreIcon />
-            }
+          <Typography variant="caption" display="block">
+            Professor: {course.professor_name || 'Unknown Professor'}
+          </Typography>
+        </Box>
+      ))}
+    </Box>
+    
+    {/* Course selection for override */}
+    {resolutionType === 'OVERRIDE' && (
+      <>
+        <FormControl fullWidth sx={{ mt: 2, mb: 2 }}>
+          <InputLabel id="course-select-label">Select course to move</InputLabel>
+          <Select
+            labelId="course-select-label"
+            value={selectedCourseToMove}
+            onChange={(e) => setSelectedCourseToMove(e.target.value)}
+            label="Select course to move"
           >
-            {resolving ? 
-              <CircularProgress size={24} /> :
-              (resolutionType === 'ACCEPT' ? 'Accept Conflict' : 
-               resolutionType === 'OVERRIDE' ? 'Override Conflict' : 
-               'Revert Resolution')
-            }
-          </Button>
-        </DialogActions>
-      </Dialog>
+            {selectedConflict?.scheduled_courses?.map(course => (
+              <MenuItem key={course.scheduled_course_id} value={course.scheduled_course_id}>
+                {course.course_id} - {course.course_name || 'Unknown Course'}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        
+        {/* Day selection dropdown */}
+        <FormControl fullWidth sx={{ mt: 2, mb: 2 }}>
+          <InputLabel id="day-select-label">Select day</InputLabel>
+          <Select
+            labelId="day-select-label"
+            value={selectedDay}
+            onChange={(e) => {
+              setSelectedDay(e.target.value);
+              setSelectedNewTimeSlot(''); // Reset time slot when day changes
+            }}
+            label="Select day"
+            disabled={loadingTimeSlots || !selectedCourseToMove}
+          >
+            {loadingTimeSlots ? (
+              <MenuItem value="">
+                <CircularProgress size={20} sx={{ mr: 1 }} /> Loading days...
+              </MenuItem>
+            ) : (
+              DAYS_OF_WEEK.map(day => (
+                <MenuItem key={day} value={day}>
+                  {day}
+                </MenuItem>
+              ))
+            )}
+          </Select>
+        </FormControl>
+
+        {/* Time slot selection dropdown - only enabled when day is selected */}
+        <FormControl fullWidth sx={{ mt: 2, mb: 2 }} disabled={!selectedDay || loadingTimeSlots}>
+          <InputLabel id="timeslot-select-label">Select time slot</InputLabel>
+          <Select
+            labelId="timeslot-select-label"
+            value={selectedNewTimeSlot}
+            onChange={(e) => setSelectedNewTimeSlot(e.target.value)}
+            label="Select time slot"
+          >
+            {availableTimeSlots
+              .filter(slot => slot.day_of_week === selectedDay)
+              .map(slot => (
+                <MenuItem key={slot.timeslot_id} value={slot.timeslot_id}>
+                  {slot.name} ({slot.start_time.substring(0, 5)} - {slot.end_time.substring(0, 5)})
+                </MenuItem>
+              ))}
+          </Select>
+        </FormControl>
+      </>
+    )}
+    
+    <TextField
+      autoFocus
+      label="Resolution Notes"
+      fullWidth
+      multiline
+      rows={4}
+      value={resolutionNotes}
+      onChange={(e) => setResolutionNotes(e.target.value)}
+      placeholder={
+        resolutionType === 'ACCEPT' ? "Explain why this conflict is acceptable (e.g., temporary situation, special arrangement)" :
+        resolutionType === 'OVERRIDE' ? "Explain how this conflict should be overridden (e.g., move to a different time slot, assign different professor)" :
+        "Explain why you're reverting the previous resolution"
+      }
+      sx={{ mt: 2 }}
+    />
+  </DialogContent>
+  <DialogActions>
+    <Button onClick={handleCloseDialog} color="inherit">Cancel</Button>
+    <Button
+      onClick={handleResolveConflict}
+      color={
+        resolutionType === 'ACCEPT' ? 'primary' : 
+        resolutionType === 'OVERRIDE' ? 'secondary' :
+        'warning'
+      }
+      disabled={!resolutionNotes.trim() || (resolutionType === 'OVERRIDE' && (!selectedCourseToMove || !selectedNewTimeSlot))}
+      startIcon={
+        resolutionType === 'ACCEPT' ? <ThumbUpIcon /> : 
+        resolutionType === 'OVERRIDE' ? <SettingsIcon /> :
+        <RestoreIcon />
+      }
+    >
+      {resolving ? 
+        <CircularProgress size={24} /> :
+        (resolutionType === 'ACCEPT' ? 'Accept Conflict' : 
+         resolutionType === 'OVERRIDE' ? 'Override Conflict' : 
+         'Revert Resolution')
+      }
+    </Button>
+  </DialogActions>
+</Dialog>
       
       <Snackbar
         open={snackbar.open}

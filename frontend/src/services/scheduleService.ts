@@ -262,12 +262,15 @@ export const getScheduleConflicts = async (scheduleId: string): Promise<Conflict
 };
 
 // Resolve a conflict
+// Resolve a conflict
 export const resolveConflict = async (
   conflictId: string, 
   resolutionData: {
     is_resolved: boolean;
     resolution_notes: string;
     action: 'ACCEPT' | 'OVERRIDE';
+    scheduled_course_id?: string;
+    new_timeslot_id?: string;
   }
 ): Promise<Conflict> => {
   try {
@@ -283,7 +286,8 @@ export const resolveConflict = async (
     });
     
     if (!response.ok) {
-      throw new Error('Failed to resolve conflict');
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to resolve conflict');
     }
     
     return await response.json();
@@ -337,6 +341,7 @@ export const getTimeSlotsByDay = async (day: string): Promise<TimeSlot[]> => {
   }
 };
 
+// In scheduleService.ts
 export const revertConflictResolution = async (
   conflictId: string,
   revertData: {
@@ -357,7 +362,8 @@ export const revertConflictResolution = async (
     });
     
     if (!response.ok) {
-      throw new Error('Failed to revert conflict resolution');
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to revert conflict resolution');
     }
     
     return await response.json();

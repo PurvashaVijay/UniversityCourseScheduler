@@ -442,10 +442,11 @@ exports.getScheduleConflicts = async (req, res) => {
 };
 
 // Resolve a conflict
+// Resolve a conflict
 exports.resolveConflict = async (req, res) => {
   try {
     const conflictId = req.params.conflictId;
-    const { resolution_notes, action } = req.body;
+    const { resolution_notes, action, scheduled_course_id, new_timeslot_id } = req.body;
     
     // Check if conflict exists
     const conflict = await Conflict.findByPk(conflictId);
@@ -461,6 +462,50 @@ exports.resolveConflict = async (req, res) => {
       },
       { where: { conflict_id: conflictId } }
     );
+
+    // If this is an OVERRIDE action with a course move
+// In the resolveConflict function in scheduleController.js
+// Add this when overriding a course:
+
+// If this is an OVERRIDE action with a course move
+// If this is an OVERRIDE action with a course move
+// In scheduleController.js - resolveConflict function (the OVERRIDE action part)
+// If this is an OVERRIDE action with a course move
+if (action === 'OVERRIDE' && scheduled_course_id && new_timeslot_id) {
+  console.log(`Moving course ${scheduled_course_id} to time slot ${new_timeslot_id}`);
+  
+  // First, get the target time slot to extract day_of_week
+  const timeSlot = await TimeSlot.findByPk(new_timeslot_id);
+  if (!timeSlot) {
+    return res.status(404).json({ message: 'Time slot not found' });
+  }
+  
+  // Get the scheduled course to save its original time slot before updating
+  const scheduledCourse = await ScheduledCourse.findByPk(scheduled_course_id);
+  if (!scheduledCourse) {
+    return res.status(404).json({ message: 'Scheduled course not found' });
+  }
+  
+  // Store original time slot information in the override reason
+  const originalTimeSlotId = scheduledCourse.timeslot_id;
+  const originalDayOfWeek = scheduledCourse.day_of_week;
+  
+  // Create override reason with embedded original info
+  const reasonWithInfo = `${resolution_notes || 'Conflict resolution override'} (original_timeslot_id: ${originalTimeSlotId}, original_day_of_week: ${originalDayOfWeek})`;
+  
+  // Update the scheduled course with new time slot and day
+  await ScheduledCourse.update(
+    {
+      timeslot_id: new_timeslot_id,
+      day_of_week: timeSlot.day_of_week,
+      is_override: true,
+      override_reason: reasonWithInfo
+    },
+    { where: { scheduled_course_id: scheduled_course_id } }
+  );
+  
+  console.log(`Course ${scheduled_course_id} moved to time slot ${new_timeslot_id} on ${timeSlot.day_of_week}`);
+}
     
     const updatedConflict = await Conflict.findByPk(conflictId, {
       include: [
@@ -483,6 +528,8 @@ exports.resolveConflict = async (req, res) => {
   }
 };
 
+// Modify the revertConflictResolution function in scheduleController.js
+// In scheduleController.js - revertConflictResolution function
 exports.revertConflictResolution = async (req, res) => {
   try {
     const conflictId = req.params.conflictId;
@@ -492,6 +539,101 @@ exports.revertConflictResolution = async (req, res) => {
     const conflict = await Conflict.findByPk(conflictId);
     if (!conflict) {
       return res.status(404).json({ message: 'Conflict not found' });
+    }
+    
+    // Find the conflict courses to identify which scheduled courses were involved
+    const conflictCourses = await ConflictCourse.findAll({
+      where: { conflict_id: conflictId }
+    });
+    
+    const scheduledCourseIds = conflictCourses.map(cc => cc.scheduled_course_id);
+    
+    // Find all the scheduled courses related to this conflict - not just overridden ones
+    const relatedCourses = await ScheduledCourse.findAll({
+      where: { 
+        scheduled_course_id: scheduledCourseIds
+      }
+    });
+    
+    console.log(`Found ${relatedCourses.length} courses related to this conflict to revert`);
+    
+    // For each course involved in the conflict
+    for (const course of relatedCourses) {
+      try {
+        console.log(`Processing course ${course.scheduled_course_id}`);
+        
+        if (course.is_override) {
+          // This course was overridden, so we need to restore original time slot
+          console.log(`Reverting overridden course ${course.scheduled_course_id}`);
+          
+          // Try to extract original time slot info from override_reason
+          let originalTimeSlotId = null;
+          let originalDayOfWeek = null;
+          
+          if (course.override_reason) {
+            const matches = course.override_reason.match(/original_timeslot_id:\s*([^,\)]+)/);
+            if (matches && matches[1]) {
+              originalTimeSlotId = matches[1].trim();
+              console.log(`Found original time slot ID: ${originalTimeSlotId}`);
+              
+              // Also try to find original day of week
+              const dayMatches = course.override_reason.match(/original_day_of_week:\s*([^,\)]+)/);
+              if (dayMatches && dayMatches[1]) {
+                originalDayOfWeek = dayMatches[1].trim();
+                console.log(`Found original day of week: ${originalDayOfWeek}`);
+              }
+            }
+          }
+          
+          // If we couldn't find original info in override_reason, look at the conflict details
+          if (!originalTimeSlotId && conflict.timeslot_id) {
+            originalTimeSlotId = conflict.timeslot_id;
+            originalDayOfWeek = conflict.day_of_week;
+            console.log(`Using conflict time slot as original: ${originalTimeSlotId}`);
+          }
+          
+          // If we still don't have time slot info, check other courses in this conflict
+          if (!originalTimeSlotId) {
+            for (const otherCourse of relatedCourses) {
+              if (otherCourse.scheduled_course_id !== course.scheduled_course_id && 
+                  !otherCourse.is_override) {
+                originalTimeSlotId = otherCourse.timeslot_id;
+                originalDayOfWeek = otherCourse.day_of_week;
+                console.log(`Using other conflicting course time slot: ${originalTimeSlotId}`);
+                break;
+              }
+            }
+          }
+          
+          // Update the course with original values
+          if (originalTimeSlotId) {
+            await ScheduledCourse.update({
+              timeslot_id: originalTimeSlotId,
+              day_of_week: originalDayOfWeek,
+              is_override: false,
+              override_reason: null
+            }, {
+              where: { scheduled_course_id: course.scheduled_course_id }
+            });
+            
+            console.log(`Reverted course ${course.scheduled_course_id} to time slot ${originalTimeSlotId}`);
+          } else {
+            // If we couldn't determine the original time slot, just reset the override flag
+            await ScheduledCourse.update({
+              is_override: false,
+              override_reason: null
+            }, {
+              where: { scheduled_course_id: course.scheduled_course_id }
+            });
+            console.log(`Could not restore original time slot for ${course.scheduled_course_id}`);
+          }
+        } else {
+          // This course was not overridden, it was already in the conflicting time slot
+          console.log(`Course ${course.scheduled_course_id} was not overridden, no changes needed`);
+        }
+      } catch (courseError) {
+        console.error(`Error reverting course ${course.scheduled_course_id}:`, courseError);
+      }
     }
     
     // Update conflict to mark as unresolved
