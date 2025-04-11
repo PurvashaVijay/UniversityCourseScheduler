@@ -8,7 +8,7 @@ type User = {
   email: string;
   first_name: string;
   last_name: string;
-  role: 'admin' | 'professor';
+  role: 'admin'; // Changed to only allow 'admin' role
   department_id: string;
 };
 
@@ -16,7 +16,7 @@ type AuthContextType = {
   user: User | null;
   loading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string, role: string) => Promise<{ success: boolean; message?: string }>;
+  login: (email: string, password: string) => Promise<{ success: boolean; message?: string }>; // Removed role parameter
   logout: () => void;
   checkAuth: () => Promise<boolean>;
 };
@@ -55,12 +55,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (currentUser) {
         // Transform the user object to match our User type
+        // Always set role as 'admin' regardless of what comes from the API
         const userData: User = {
-          id: currentUser.admin_id || currentUser.professor_id,
+          id: currentUser.admin_id || currentUser.id,
           email: currentUser.email,
           first_name: currentUser.first_name,
           last_name: currentUser.last_name,
-          role: currentUser.role,
+          role: 'admin', // Always admin
           department_id: currentUser.department_id,
         };
         
@@ -75,18 +76,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const login = async (email: string, password: string, role: string): Promise<{ success: boolean; message?: string }> => {
+  const login = async (email: string, password: string): Promise<{ success: boolean; message?: string }> => {
     try {
-      const result = await authService.login(email, password, role);
+      // Always use 'admin' role
+      const result = await authService.login(email, password, 'admin');
       
       if (result.success && result.user) {
         // Transform the user object to match our User type
         const userData: User = {
-          id: result.user.admin_id || result.user.professor_id,
+          id: result.user.admin_id || result.user.id,
           email: result.user.email,
           first_name: result.user.first_name,
           last_name: result.user.last_name,
-          role: role as 'admin' | 'professor',
+          role: 'admin', // Always admin
           department_id: result.user.department_id,
         };
         

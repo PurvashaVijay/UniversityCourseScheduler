@@ -1,4 +1,5 @@
 // src/components/admin/schedule/ScheduleList.tsx
+
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -7,7 +8,6 @@ import {
   FormControl,
   InputLabel,
   MenuItem,
-  Select,
   Typography,
   CircularProgress,
   Paper,
@@ -30,7 +30,9 @@ import {
   DialogTitle,
   Button,
   ListItemIcon,
-  ListItemText
+  ListItemText,
+  Select, // Make sure Select is imported
+  SelectChangeEvent // Add this for type safety
 } from '@mui/material';
 import ViewWeekIcon from '@mui/icons-material/ViewWeek';
 import ViewDayIcon from '@mui/icons-material/ViewDay';
@@ -38,6 +40,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import scheduleService, { Schedule, ScheduledCourse, TimeSlot } from '../../../services/scheduleService';
 import semesterService from '../../../services/semesterService';
+import CourseChangeDialog from './CourseChangeDialog';
 
 interface Semester {
   semester_id: string;
@@ -61,11 +64,14 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
   onScheduleDeleted,
   onScheduleSelected
 }) => {
+  // Define refreshCounter state variable
+  const [refreshCounter, setRefreshCounter] = useState<number>(0);
+  
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [semesters, setSemesters] = useState<Semester[]>([]);
   const [selectedSchedule, setSelectedSchedule] = useState<string>('');
   const [scheduledCourses, setScheduledCourses] = useState<ScheduledCourse[]>([]);
-  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
+  const [allTimeSlots, setAllTimeSlots] = useState<TimeSlot[]>([]); // Renamed from timeSlots
   const [loading, setLoading] = useState<boolean>(true);
   const [loadingCourses, setLoadingCourses] = useState<boolean>(false);
   const [selectedSemester, setSelectedSemester] = useState<string>('');
@@ -76,20 +82,29 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
     message: string;
     severity: 'success' | 'error' | 'info' | 'warning';
   }>({ open: false, message: '', severity: 'info' });
- 
+
   // New state for delete confirmation dialog
   const [deleteDialogOpen, setDeleteDialogOpen] = useState<boolean>(false);
   const [scheduleToDelete, setScheduleToDelete] = useState<string>('');
   const [scheduleNameToDelete, setScheduleNameToDelete] = useState<string>('');
   const [deleteLoading, setDeleteLoading] = useState<boolean>(false);
 
+  // New state for course change dialog
+  const [courseChangeDialogOpen, setCourseChangeDialogOpen] = useState<boolean>(false);
+  const [selectedCourseForChange, setSelectedCourseForChange] = useState<ScheduledCourse | null>(null);
+
+  useEffect(() => {
+    // This ensures the value is read
+    console.log('Schedule refresh triggered:', refreshCounter);
+  }, [refreshCounter]);
+  
   // Load semesters
   useEffect(() => {
     const fetchSemesters = async () => {
       try {
         const data = await semesterService.getAllSemesters();
         setSemesters(data);
-       
+        
         if (data.length > 0) {
           // Select the most recent semester by default
           const sortedSemesters = [...data].sort((a, b) =>
@@ -106,7 +121,6 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
         });
       }
     };
-
     fetchSemesters();
   }, []);
 
@@ -114,16 +128,16 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
   useEffect(() => {
     const fetchSchedules = async () => {
       if (!selectedSemester) return;
-     
+      
       try {
         setLoading(true);
         console.log('Fetching schedules for semester:', selectedSemester);
         console.log('Current forceRefresh value:', forceRefresh);
-       
+        
         const data = await scheduleService.getSchedulesBySemester(selectedSemester);
         console.log('Fetched schedules:', data);
         setSchedules(data);
-       
+        
         // If there's a selected schedule ID from props, use it
         if (selectedScheduleId && data.some(s => s.schedule_id === selectedScheduleId)) {
           console.log('Setting selected schedule to selectedScheduleId:', selectedScheduleId);
@@ -151,13 +165,12 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
         setLoading(false);
       }
     };
-
     // Add more detailed logging
     console.log('Schedules useEffect triggered');
     console.log('Selected semester:', selectedSemester);
     console.log('Selected schedule ID from props:', selectedScheduleId);
     console.log('ForceRefresh value:', forceRefresh);
-   
+    
     fetchSchedules();
   }, [selectedSemester, selectedScheduleId, forceRefresh, onScheduleSelected]);
 
@@ -175,7 +188,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
     const fetchTimeSlots = async () => {
       try {
         const data = await scheduleService.getAllTimeSlots();
-        setTimeSlots(data);
+        setAllTimeSlots(data); // Now using allTimeSlots
       } catch (error) {
         console.error('Error fetching time slots:', error);
         setSnackbar({
@@ -185,7 +198,6 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
         });
       }
     };
-
     fetchTimeSlots();
   }, []);
 
@@ -193,11 +205,11 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
   useEffect(() => {
     const fetchScheduledCourses = async () => {
       if (!selectedSchedule) return;
-     
+      
       try {
         setLoadingCourses(true);
         console.log('Fetching scheduled courses for schedule:', selectedSchedule);
-       
+        
         const data = await scheduleService.getScheduledCourses(selectedSchedule);
         console.log('Fetched scheduled courses:', data.length);
         setScheduledCourses(data);
@@ -212,15 +224,16 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
         setLoadingCourses(false);
       }
     };
-
     fetchScheduledCourses();
   }, [selectedSchedule]);
 
-  const handleSemesterChange = (event: any) => {
+  // Fixed the type for event parameter
+  const handleSemesterChange = (event: SelectChangeEvent) => {
     setSelectedSemester(event.target.value);
   };
 
-  const handleScheduleChange = (event: any) => {
+  // Fixed the type for event parameter
+  const handleScheduleChange = (event: SelectChangeEvent) => {
     const newScheduleId = event.target.value;
     console.log("Schedule selected manually:", newScheduleId);
     setSelectedSchedule(newScheduleId);
@@ -241,6 +254,28 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
     setSnackbar({ ...snackbar, open: false });
   };
 
+  // Functions for course change dialog
+  const handleCourseClick = (course: ScheduledCourse) => {
+    setSelectedCourseForChange(course);
+    setCourseChangeDialogOpen(true);
+  };
+
+  const handleCourseChangeDialogClose = () => {
+    setCourseChangeDialogOpen(false);
+    setSelectedCourseForChange(null);
+  };
+
+  const handleCourseChanged = () => {
+    console.log("Course changed, refreshing data");
+    // Force refresh the schedule list using the local state update function
+    setRefreshCounter(prev => prev + 1);
+    
+    // Notify parent of changes if callback exists
+    if (onScheduleSelected && selectedSchedule) {
+      onScheduleSelected(selectedSchedule);
+    }
+  };
+
   // New functions for schedule deletion
   const handleDeleteClick = (scheduleId: string, scheduleName: string) => {
     setScheduleToDelete(scheduleId);
@@ -256,21 +291,21 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
 
   const handleConfirmDelete = async () => {
     if (!scheduleToDelete) return;
-   
+    
     try {
       setDeleteLoading(true);
       await scheduleService.deleteSchedule(scheduleToDelete);
-     
+      
       setSnackbar({
         open: true,
         message: 'Schedule deleted successfully',
         severity: 'success'
       });
-     
+      
       // Remove the deleted schedule from state
       const updatedSchedules = schedules.filter(s => s.schedule_id !== scheduleToDelete);
       setSchedules(updatedSchedules);
-     
+      
       // Update selected schedule if the deleted one was selected
       if (selectedSchedule === scheduleToDelete) {
         if (updatedSchedules.length > 0) {
@@ -284,7 +319,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
           setScheduledCourses([]);
         }
       }
-     
+      
       // Call the callback if provided
       if (onScheduleDeleted) {
         onScheduleDeleted();
@@ -304,7 +339,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
 
   // Helper function to get time slots for a specific day
   const getTimeSlotsForDay = (day: string) => {
-    return timeSlots
+    return allTimeSlots // Changed from timeSlots to allTimeSlots
       .filter(slot => slot.day_of_week === day)
       .sort((a, b) => {
         const timeA = new Date(`1970-01-01T${a.start_time}`).getTime();
@@ -325,16 +360,16 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
     // Map to store unique time slots by time range
     // Key format: "start_time-end_time"
     const uniqueSlots = new Map<string, TimeSlot[]>();
-   
+    
     // Group time slots by time range (regardless of day)
-    timeSlots.forEach(slot => {
+    allTimeSlots.forEach(slot => { // Changed from timeSlots to allTimeSlots
       const timeKey = `${slot.start_time}-${slot.end_time}`;
       if (!uniqueSlots.has(timeKey)) {
         uniqueSlots.set(timeKey, []);
       }
       uniqueSlots.get(timeKey)?.push(slot);
     });
-   
+    
     // Convert the map to array and sort by start time
     return Array.from(uniqueSlots.entries())
       .map(([_, slots]) => slots[0]) // Take the first slot from each group
@@ -347,7 +382,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
 
   // Find the timeslot ID for a specific time range and day
   const getTimeslotIdForTimeAndDay = (timeStart: string, timeEnd: string, day: string) => {
-    const slot = timeSlots.find(
+    const slot = allTimeSlots.find( // Changed from timeSlots to allTimeSlots
       s => s.start_time === timeStart && s.end_time === timeEnd && s.day_of_week === day
     );
     return slot?.timeslot_id;
@@ -357,20 +392,20 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
   const renderScheduleCell = (timeslotId: string, day: string) => {
     // Early return if timeslotId is undefined (may happen in week view for some combinations)
     if (!timeslotId) return <Box sx={{ height: '100%', minHeight: '60px' }}></Box>;
-   
+    
     const courses = getCoursesForTimeSlot(timeslotId, day);
-   
+    
     if (courses.length === 0) {
       return <Box sx={{ height: '100%', minHeight: '60px' }}></Box>;
     }
-   
+    
     return (
       <Box sx={{ p: 1 }}>
         {courses.map((course, index) => {
           // Safely check if course has is_core property through the course object
           const isCoreClass = course.course && 'is_core' in course.course ?
             Boolean(course.course.is_core) : false;
-           
+            
           return (
             <Box
               key={course.scheduled_course_id}
@@ -378,8 +413,14 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
                 mb: index !== courses.length - 1 ? 1 : 0,
                 p: 1,
                 borderRadius: 1,
-                bgcolor: course.is_override ? '#fff3cd' : (isCoreClass ? '#e3f2fd' : '#f1f8e9')
+                bgcolor: course.is_override ? '#fff3cd' : (isCoreClass ? '#e3f2fd' : '#f1f8e9'),
+                cursor: 'pointer',
+                '&:hover': {
+                  opacity: 0.9,
+                  boxShadow: 1,
+                }
               }}
+              onClick={() => handleCourseClick(course)}
             >
               <Typography variant="body2" fontWeight="bold">
                 {course.course_id} - {course.course?.course_name || 'Unnamed Course'}
@@ -408,9 +449,9 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
       <Box sx={{ mt: 2 }}>
         {DAYS_OF_WEEK.map((day, dayIndex) => {
           const dayTimeSlots = getTimeSlotsForDay(day);
-         
+          
           if (dayTimeSlots.length === 0) return null;
-         
+          
           return (
             <Box key={day} sx={{ mb: 4 }}>
               <Typography variant="h6" gutterBottom sx={{
@@ -421,7 +462,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
               }}>
                 {day}
               </Typography>
-             
+              
               <TableContainer component={Paper} sx={{ boxShadow: 2 }}>
                 <Table size="small">
                   <TableHead>
@@ -455,7 +496,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
                   </TableBody>
                 </Table>
               </TableContainer>
-             
+              
               {/* Add space between days */}
               {dayIndex < DAYS_OF_WEEK.length - 1 && (
                 <Box sx={{ height: '30px' }} />
@@ -470,7 +511,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
   // Render the new week view
   const renderWeekView = () => {
     const uniqueTimeSlots = getUniqueTimeSlots();
-   
+    
     return (
       <Box sx={{ mt: 2 }}>
         <TableContainer component={Paper} sx={{ boxShadow: 2 }}>
@@ -518,7 +559,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
                       timeSlot.end_time,
                       day
                     );
-                   
+                    
                     return (
                       <TableCell
                         key={`${timeSlot.start_time}-${day}`}
@@ -561,7 +602,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
           {schedule.name}
         </ListItemText>
       </Box>
-     
+      
       <IconButton
         size="small"
         color="error"
@@ -586,7 +627,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
           <Typography variant="h6" gutterBottom>
             Course Schedule
           </Typography>
-         
+          
           <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
             <FormControl fullWidth sx={{ flex: 1 }}>
               <InputLabel id="semester-select-label">Semester</InputLabel>
@@ -605,7 +646,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
                 ))}
               </Select>
             </FormControl>
-           
+            
             <FormControl fullWidth sx={{ flex: 1 }}>
               <InputLabel id="schedule-select-label">Schedule</InputLabel>
               <Select
@@ -663,7 +704,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
               </ToggleButton>
             </ToggleButtonGroup>
           </Box>
-         
+          
           <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Box>
               <Typography variant="body2" color="text.secondary">
@@ -684,7 +725,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
                 </Box>
               </Box>
             </Box>
-           
+            
             {scheduledCourses.length > 0 && (
               <Typography variant="body2">
                 {scheduledCourses.length} courses scheduled
@@ -693,7 +734,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
           </Box>
         </CardContent>
       </Card>
-     
+      
       {loadingCourses ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
           <CircularProgress />
@@ -706,58 +747,66 @@ const ScheduleList: React.FC<ScheduleListProps> = ({
         <Alert severity="info" sx={{ mt: 2 }}>
           No courses scheduled yet.
         </Alert>
-      ) : (
-        viewMode === 'day' ? renderDayView() : renderWeekView()
-      )}
-     
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={6000}
-        onClose={handleCloseSnackbar}
-        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-      >
-        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
-      {/* Delete Confirmation Dialog */}
-      <Dialog
-        open={deleteDialogOpen}
-        onClose={handleCloseDeleteDialog}
-        aria-labelledby="alert-dialog-title"
-        aria-describedby="alert-dialog-description"
-      >
-        <DialogTitle id="alert-dialog-title">
-          {"Delete Schedule"}
-        </DialogTitle>
-        <DialogContent>
-          <DialogContentText id="alert-dialog-description">
-            Are you sure you want to delete the schedule "<strong>{scheduleNameToDelete}</strong>"?
-            This action cannot be undone and will permanently remove all scheduled courses
-            associated with this schedule.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={handleCloseDeleteDialog}
-            color="inherit"
-            disabled={deleteLoading}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleConfirmDelete}
-            color="error"
-            autoFocus
-            disabled={deleteLoading}
-            startIcon={deleteLoading ? <CircularProgress size={20} /> : <DeleteIcon />}
-          >
-            {deleteLoading ? 'Deleting...' : 'Delete Schedule'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Box>
-  );
-};
-
-export default ScheduleList;
+        ) : (
+          viewMode === 'day' ? renderDayView() : renderWeekView()
+        )}
+        
+        <Snackbar
+          open={snackbar.open}
+          autoHideDuration={6000}
+          onClose={handleCloseSnackbar}
+          anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+        >
+          <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
+            {snackbar.message}
+          </Alert>
+        </Snackbar>
+        {/* Delete Confirmation Dialog */}
+        <Dialog
+          open={deleteDialogOpen}
+          onClose={handleCloseDeleteDialog}
+          aria-labelledby="alert-dialog-title"
+          aria-describedby="alert-dialog-description"
+        >
+          <DialogTitle id="alert-dialog-title">
+            {"Delete Schedule"}
+          </DialogTitle>
+          <DialogContent>
+            <DialogContentText id="alert-dialog-description">
+              Are you sure you want to delete the schedule "<strong>{scheduleNameToDelete}</strong>"?
+              This action cannot be undone and will permanently remove all scheduled courses
+              associated with this schedule.
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button
+              onClick={handleCloseDeleteDialog}
+              color="inherit"
+              disabled={deleteLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirmDelete}
+              color="error"
+              autoFocus
+              disabled={deleteLoading}
+              startIcon={deleteLoading ? <CircularProgress size={20} /> : <DeleteIcon />}
+            >
+              {deleteLoading ? 'Deleting...' : 'Delete Schedule'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+        
+        {/* Course Change Dialog */}
+        <CourseChangeDialog
+          open={courseChangeDialogOpen}
+          onClose={handleCourseChangeDialogClose}
+          scheduledCourse={selectedCourseForChange}
+          onCourseChanged={handleCourseChanged}
+        />
+      </Box>
+    );
+  };
+  
+  export default ScheduleList;

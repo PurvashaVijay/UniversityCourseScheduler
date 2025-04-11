@@ -16,7 +16,7 @@ const authService = {
   login: async (email: string, password: string, role: string): Promise<LoginResponse> => {
     try {
       // Endpoint depends on the role
-      const endpoint = role === 'admin' ? 'auth/admin/login' : 'auth/professor/login';
+      const endpoint = 'auth/admin/login';
       
       const response = await fetch(`${API_URL}/${endpoint}`, {
         method: 'POST',

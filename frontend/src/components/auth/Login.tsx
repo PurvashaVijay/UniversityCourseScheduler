@@ -9,31 +9,22 @@ import {
   FormControlLabel,
   IconButton,
   InputAdornment,
-  Radio,
-  RadioGroup,
   TextField,
   Typography,
   Link,
-  FormControl,
-  FormLabel,
   Alert,
   Snackbar,
   CircularProgress
 } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
-//import udLogo from '../../assets/ud-logo.png';
-//import authService from '../../services/authService';
-// Remove the dot-slash prefix, just use the filename directly
 import authService from '../../services/authService';
 import { useNavigate } from 'react-router-dom';
 const udLogo = require('./ud-logo.png').default || require('./ud-logo.png');
 
-
 const Login: React.FC = () => {
-  const navigate = useNavigate(); // <-- Moved to the top level of the component
+  const navigate = useNavigate();
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
-  const [role, setRole] = useState<string>('professor');
   const [rememberMe, setRememberMe] = useState<boolean>(false);
   const [showPassword, setShowPassword] = useState<boolean>(false);
   
@@ -42,51 +33,7 @@ const Login: React.FC = () => {
   const [alertOpen, setAlertOpen] = useState<boolean>(false);
   const [alertMessage, setAlertMessage] = useState<string>('');
   const [alertSeverity, setAlertSeverity] = useState<'success' | 'error'>('error');
- /*
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    
-    try {
-      const result = await authService.login(email, password, role);
-      
-      if (result.success) {
-        // Show success message
-        setAlertSeverity('success');
-        setAlertMessage('Login successful! Redirecting...');
-        setAlertOpen(true);
-        
-        // In a real app, you would:
-        // 1. Store the user in state/context
-        // 2. Store the token in localStorage if rememberMe is true
-        // 3. Redirect to the appropriate dashboard
-        
-        console.log('Login successful:', result.user);
-        
-        // Simulate redirect after 2 seconds
-        setTimeout(() => {
-          if (role === 'admin') {
-            navigate('/admin/dashboard'); // Make sure this path matches your route definition
-          } else {
-            navigate('/professor/dashboard');
-          }
-        }, 2000);
-      } else {
-        // Show error message
-        setAlertSeverity('error');
-        setAlertMessage(result.message || 'Login failed');
-        setAlertOpen(true);
-      }
-    } catch (error) {
-      // Show generic error
-      setAlertSeverity('error');
-      setAlertMessage('An unexpected error occurred. Please try again.');
-      setAlertOpen(true);
-    } finally {
-      setIsLoading(false);
-    }
-  };
- */
+
   // Add this new handleSubmit function
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,13 +52,9 @@ const Login: React.FC = () => {
         
         console.log('Login successful:', result.user);
         
-        // Simulate redirect after 2 seconds
+        // Redirect to admin dashboard after 2 seconds
         setTimeout(() => {
-          if (role === 'admin') {
-            navigate('/admin'); 
-          } else {
-            navigate('/professor');
-          }
+          navigate('/admin');
         }, 2000);
       } else {
         // Show error message
@@ -129,7 +72,6 @@ const Login: React.FC = () => {
     }
   };
   
-
   return (
     <Box
       sx={{
@@ -137,9 +79,10 @@ const Login: React.FC = () => {
         height: '100vh',
         bgcolor: '#00539F', // University of Delaware blue
         display: 'flex',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         justifyContent: 'center',
-        overflow: 'auto'
+        overflow: 'auto',
+        pt:0
       }}
     >
     <Container 
@@ -154,13 +97,14 @@ const Login: React.FC = () => {
       }}
     >
       <Box sx={{ mb: 4, textAlign: 'center' }}>
-        <img 
-          src={udLogo} 
-          alt="University of Delaware Logo" 
-          style={{ 
-            width: '120px', 
-            marginBottom: '16px' 
-          }} 
+      <img 
+        src={udLogo} 
+        alt="University of Delaware Logo" 
+        style={{ 
+          width: '120px',        // Reduced from 240px
+          height: 'auto', 
+          marginBottom: '16px' 
+  }} 
         />
         <Typography variant="h4" component="h1" sx={{ color: 'white', fontWeight: 'bold', mb: 1 }}>
           Lerner Graduate College
@@ -222,19 +166,6 @@ const Login: React.FC = () => {
               }}
               sx={{ mb: 2 }}
             />
-
-            <FormControl component="fieldset" sx={{ mb: 2, width: '100%' }}>
-              <FormLabel component="legend" sx={{ color: '#444', fontWeight: 600 }}>Login as:</FormLabel>
-              <RadioGroup
-                row
-                name="role"
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-              >
-                <FormControlLabel value="professor" control={<Radio />} label="Professor" />
-                <FormControlLabel value="admin" control={<Radio />} label="Admin" />
-              </RadioGroup>
-            </FormControl>
 
             <FormControlLabel
               control={

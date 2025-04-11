@@ -1,9 +1,11 @@
 // src/services/scheduleService.ts
+
 import authService from './authService';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
 
 // Type definitions
+
 export interface Schedule {
   schedule_id: string;
   semester_id: string;
@@ -79,6 +81,15 @@ export interface Conflict {
     professor_id?: string;
     professor_name?: string;
   }[];
+}
+
+export interface OverrideRequest {
+  schedule_id: string;
+  course_id: string;
+  professor_id: string;
+  timeslot_id: string;
+  day_of_week: string;
+  override_reason?: string;
 }
 
 // Get all schedules
@@ -199,7 +210,9 @@ export const generateSchedule = async (semesterId: string, name: string): Promis
 };
 
 // Delete a schedule
-export const deleteSchedule = async (scheduleId: string): Promise<{ success: boolean; message: string }> => {
+export const deleteSchedule = async (scheduleId: string): Promise<{
+  success: boolean; message: string
+}> => {
   try {
     const token = authService.getToken();
     
@@ -262,9 +275,8 @@ export const getScheduleConflicts = async (scheduleId: string): Promise<Conflict
 };
 
 // Resolve a conflict
-// Resolve a conflict
 export const resolveConflict = async (
-  conflictId: string, 
+  conflictId: string,
   resolutionData: {
     is_resolved: boolean;
     resolution_notes: string;
@@ -341,7 +353,35 @@ export const getTimeSlotsByDay = async (day: string): Promise<TimeSlot[]> => {
   }
 };
 
-// In scheduleService.ts
+// Create an override for a scheduled course
+export const createOverride = async (overrideData: OverrideRequest): Promise<any> => {
+  try {
+    const token = authService.getToken();
+    
+    console.log('Creating course override with data:', overrideData);
+    
+    const response = await fetch(`${API_URL}/scheduled-courses/override`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(overrideData)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to create course override');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error creating course override:', error);
+    throw error;
+  }
+};
+
+// Revert a conflict resolution
 export const revertConflictResolution = async (
   conflictId: string,
   revertData: {
@@ -384,7 +424,8 @@ const scheduleService = {
   resolveConflict,
   revertConflictResolution,
   getAllTimeSlots,
-  getTimeSlotsByDay
+  getTimeSlotsByDay,
+  createOverride
 };
 
 export default scheduleService;
