@@ -36,7 +36,6 @@ import ThumbUpIcon from '@mui/icons-material/ThumbUp';
 import SettingsIcon from '@mui/icons-material/Settings';
 import RestoreIcon from '@mui/icons-material/Restore';
 import scheduleService, { Conflict } from '../../../services/scheduleService';
-
 interface ConflictManagementProps {
   scheduleId?: string;
   onConflictResolved?: () => void;
@@ -65,7 +64,16 @@ const ConflictManagement: React.FC<ConflictManagementProps> = ({ scheduleId, onC
 
   // Fetch conflicts when scheduleId changes
   useEffect(() => {
+    if (conflicts.length > 0) {
+      console.log('First conflict data:', conflicts[0]);
+      console.log('Time slot info:', conflicts[0].timeslot_info);
+      console.log('Direct time slot:', conflicts[0].timeslot);
+      console.log('Scheduled courses:', conflicts[0].scheduled_courses);
+    }
+  }, [conflicts]);
+  useEffect(() => {
     console.log("ConflictManagement received scheduleId:", scheduleId);
+
     
     // Define fetchConflicts inside useEffect to avoid dependency issues
     const fetchConflicts = async () => {
@@ -280,20 +288,49 @@ const handleResolveConflict = async () => {
   };
 
   // Format the time slot information
-  const formatTimeSlot = (conflict: Conflict) => {
-    if (!conflict.timeslot) return 'N/A';
+  // Helper function to format time in 12-hour format
+  const formatTime = (timeString: string | undefined): string => {
+    if (!timeString) return 'N/A';
     
-    const startTime = conflict.timeslot.start_time 
-      ? new Date(`1970-01-01T${conflict.timeslot.start_time}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      : 'N/A';
-      
-    const endTime = conflict.timeslot.end_time 
-      ? new Date(`1970-01-01T${conflict.timeslot.end_time}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      : 'N/A';
-    
-    return `${startTime} - ${endTime}`;
+    try {
+      const date = new Date(`1970-01-01T${timeString}`);
+      return date.toLocaleTimeString([], { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: true 
+      });
+    } catch (error) {
+      console.error('Error formatting time:', error);
+      return timeString.substring(0, 5); // Just return HH:MM as fallback
+    }
   };
-
+// Format the time slot information using our new helper function
+const getTimeSlotInfo = (conflict: Conflict): { day: string, name: string, timeRange: string } => {
+  // Check if we have time_slot (note: this is the property name shown in your data)
+  if (conflict.time_slot) {
+    return {
+      day: conflict.day_of_week || conflict.time_slot.day_of_week || 'Unknown',
+      name: conflict.time_slot.name || 'Unknown Slot',
+      timeRange: `${conflict.time_slot.start_time.substring(0, 5)} - ${conflict.time_slot.end_time.substring(0, 5)}`
+    };
+  }
+  
+  // If we at least have a day_of_week in the conflict
+  if (conflict.day_of_week) {
+    return {
+      day: conflict.day_of_week,
+      name: conflict.timeslot_id ? `Time Slot ${conflict.timeslot_id.replace(/[^0-9]/g, '')}` : 'Unknown Slot',
+      timeRange: 'Time not available'
+    };
+  }
+  
+  // Fallback for no information
+  return {
+    day: 'Unknown',
+    name: 'Unknown Slot',
+    timeRange: 'Time not available'
+  };
+};
   return (
     <Card sx={{ mt: 4 }}>
       <CardContent>
@@ -349,17 +386,54 @@ const handleResolveConflict = async () => {
                         />
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2" fontWeight="medium">
-                          {conflict.day_of_week}
-                        </Typography>
-                        <Typography variant="caption" display="block">
-                          {conflict.timeslot?.name || 'N/A'}
-                        </Typography>
-                        {/* Added time display */}
-                        <Typography variant="caption" color="text.secondary" display="block">
-                          {formatTimeSlot(conflict)}
-                        </Typography>
-                      </TableCell>
+  {(() => {
+    // Try to get time slot info from multiple places, in order of preference
+    let timeSlotInfo = conflict.time_slot || conflict.timeslot_info || conflict.timeslot;
+    
+    // If no direct time slot info, check scheduled courses
+    if (!timeSlotInfo && conflict.scheduled_courses && conflict.scheduled_courses.length > 0) {
+      const firstCourse = conflict.scheduled_courses[0];
+      timeSlotInfo = firstCourse.timeslot;
+    }
+    
+    if (timeSlotInfo) {
+      return (
+        <>
+          <Typography variant="body2" fontWeight="medium">
+            {conflict.day_of_week || timeSlotInfo.day_of_week || 'Unknown'}
+          </Typography>
+          <Typography variant="caption" display="block">
+            {timeSlotInfo.name || 'Unknown Slot'}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" display="block">
+            {timeSlotInfo.start_time && timeSlotInfo.end_time ? 
+              `${timeSlotInfo.start_time.substring(0, 5)} - ${timeSlotInfo.end_time.substring(0, 5)}` :
+              'Time not available'}
+          </Typography>
+        </>
+      );
+    } else {
+      // For conflicts with NO_AVAILABLE_SLOT type, show just the day
+      if (conflict.conflict_type === 'NO_AVAILABLE_SLOT') {
+        return (
+          <>
+            <Typography variant="body2" fontWeight="medium">
+              {conflict.day_of_week || 'Unknown'}
+            </Typography>
+          </>
+        );
+      }
+      
+      return (
+        <>
+          <Typography variant="body2" fontWeight="medium">
+            {conflict.day_of_week || 'Unknown'}
+          </Typography>
+        </>
+      );
+    }
+  })()}
+</TableCell>
                       <TableCell>
                         <Typography variant="body2">
                           {conflict.description}
@@ -458,26 +532,55 @@ const handleResolveConflict = async () => {
      'Revert Resolution'}
   </DialogTitle>
   <DialogContent>
-    <DialogContentText sx={{ mb: 2 }}>
-      {selectedConflict?.description}
-    </DialogContentText>
-    
-    {/* Show conflicting courses */}
-    <Typography variant="subtitle2" gutterBottom>
-      Conflicting Courses:
-    </Typography>
-    <Box sx={{ mb: 2 }}>
-      {selectedConflict?.scheduled_courses?.map(course => (
-        <Box key={course.scheduled_course_id} sx={{ mb: 1, p: 1, border: '1px solid #eee', borderRadius: 1 }}>
-          <Typography variant="body2" fontWeight="bold">
-            {course.course_id} - {course.course_name || 'Unknown Course'}
-          </Typography>
-          <Typography variant="caption" display="block">
-            Professor: {course.professor_name || 'Unknown Professor'}
-          </Typography>
-        </Box>
-      ))}
+  <DialogContentText sx={{ mb: 2 }}>
+    {selectedConflict?.description}
+  </DialogContentText>
+  
+  {/* Display conflict time information */}
+  {selectedConflict && (
+    <Box sx={{ mb: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
+      <Typography variant="subtitle2" gutterBottom>
+        Conflict Details:
+      </Typography>
+      <Typography variant="body2">
+        <strong>Day:</strong> {(() => {
+          const timeInfo = selectedConflict ? getTimeSlotInfo(selectedConflict) : { day: 'N/A', name: 'N/A', timeRange: 'N/A' };
+          return timeInfo.day;
+        })()}
+      </Typography>
+      <Typography variant="body2">
+        <strong>Time Slot:</strong> {(() => {
+          const timeInfo = selectedConflict ? getTimeSlotInfo(selectedConflict) : { day: 'N/A', name: 'N/A', timeRange: 'N/A' };
+          return `${timeInfo.name} (${timeInfo.timeRange})`;
+        })()}
+      </Typography>
+      <Typography variant="body2">
+        <strong>Type:</strong> {getReadableConflictType(selectedConflict.conflict_type)}
+      </Typography>
     </Box>
+  )}
+  
+  {/* Show conflicting courses */}
+  <Typography variant="subtitle2" gutterBottom>
+    Conflicting Courses:
+  </Typography>
+  <Box sx={{ mb: 2 }}>
+    {selectedConflict?.scheduled_courses?.map(course => (
+      <Box key={course.scheduled_course_id} sx={{ mb: 1, p: 1, border: '1px solid #eee', borderRadius: 1 }}>
+        <Typography variant="body2" fontWeight="bold">
+          {course.course_id} - {course.course_name || 'Unknown Course'}
+        </Typography>
+        <Typography variant="caption" display="block">
+          Professor: {course.professor_name || 'Unknown Professor'}
+        </Typography>
+        {course.timeslot && (
+          <Typography variant="caption" color="text.secondary" display="block">
+            Scheduled: {course.timeslot.day_of_week || course.day_of_week || 'Unknown Day'}, {formatTime(course.timeslot.start_time)} - {formatTime(course.timeslot.end_time)}
+          </Typography>
+        )}
+      </Box>
+    ))}
+  </Box>
     
     {/* Course selection for override */}
     {resolutionType === 'OVERRIDE' && (

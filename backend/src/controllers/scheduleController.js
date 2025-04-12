@@ -421,20 +421,45 @@ exports.getScheduleConflicts = async (req, res) => {
     const conflicts = await Conflict.findAll({
       where: { schedule_id: scheduleId },
       include: [
-        { model: TimeSlot, attributes: ['name', 'start_time', 'end_time'] },
+        { 
+          model: TimeSlot, 
+          attributes: ['timeslot_id', 'name', 'start_time', 'end_time', 'day_of_week', 'duration_minutes'] 
+        },
         { 
           model: ScheduledCourse, 
           through: ConflictCourse,
           include: [
             { model: Course, attributes: ['course_id', 'course_name', 'is_core'] },
-            { model: Professor, attributes: ['professor_id', 'first_name', 'last_name'] }
+            { model: Professor, attributes: ['professor_id', 'first_name', 'last_name'] },
+            { 
+              model: TimeSlot, 
+              attributes: ['timeslot_id', 'name', 'start_time', 'end_time', 'day_of_week'] 
+            }
           ]
         }
       ],
       order: [['created_at', 'DESC']]
     });
     
-    return res.status(200).json(conflicts);
+    // Process the conflicts to ensure we have time slot information
+    const processedConflicts = conflicts.map(conflict => {
+      const conflictJson = conflict.toJSON();
+      
+      // Extract time slot information from either conflict's time slot or first scheduled course
+      let timeSlotInfo = conflictJson.timeslot || null;
+      
+      if (!timeSlotInfo && conflictJson.ScheduledCourses && conflictJson.ScheduledCourses.length > 0) {
+        timeSlotInfo = conflictJson.ScheduledCourses[0].timeslot || null;
+      }
+      
+      // Return the processed conflict data
+      return {
+        ...conflictJson,
+        timeslot_info: timeSlotInfo // Add a dedicated field for time slot info
+      };
+    });
+    
+    return res.status(200).json(processedConflicts);
   } catch (error) {
     console.error('Error retrieving schedule conflicts:', error);
     return res.status(500).json({ message: 'Failed to retrieve schedule conflicts' });

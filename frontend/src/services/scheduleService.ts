@@ -70,18 +70,39 @@ export interface Conflict {
   created_at: string;
   updated_at: string;
   timeslot?: {
+    timeslot_id: string;
     name: string;
     start_time: string;
     end_time: string;
+    day_of_week: string;
+    duration_minutes?: number;
   };
+  time_slot?: {
+    timeslot_id: string;
+    name: string;
+    start_time: string;
+    end_time: string;
+    day_of_week: string;
+  };
+  
+  timeslot_info?: any;
   scheduled_courses?: {
     scheduled_course_id: string;
     course_id: string;
     course_name?: string;
     professor_id?: string;
     professor_name?: string;
+    day_of_week?: string;
+    timeslot?: {
+      timeslot_id: string;
+      name: string;
+      start_time: string;
+      end_time: string;
+      day_of_week: string;
+    };
   }[];
 }
+
 
 export interface OverrideRequest {
   schedule_id: string;
