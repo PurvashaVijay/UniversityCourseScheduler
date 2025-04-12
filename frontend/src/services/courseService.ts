@@ -1,5 +1,12 @@
 // src/services/courseService.ts
-
+// Add program association interface
+export interface ProgramAssociation {
+  program_id: string;
+  name?: string;
+  department_id?: string;
+  is_core: boolean;
+  num_classes: number;
+}
 // Updated Course interface with correct fields and optional properties
 export interface Course {
   course_id: string;
@@ -10,12 +17,15 @@ export interface Course {
   description?: string;
   duration_minutes: number;
   is_core: boolean;
+  numClasses?: number; // Add this new field
   semesters?: string[];  // Optional array of semesters
   semester?: string;     // Optional single semester
   created_at: string;
   updated_at: string;
   program?: any;
-  programs?: any[];      // For courses with multiple programs
+  //programs?: any[];      // For courses with multiple programs
+  programs?: ProgramAssociation[];  // Add this for multiple programs
+  program_associations?: ProgramAssociation[];  // For sending to API
   prerequisites?: any[];
   Department?: any;      // For Department association
   professor_course?: {   // Add professor_course property
@@ -129,6 +139,7 @@ export const createCourse = async (course: Partial<Course>): Promise<Course> => 
       duration_minutes: course.duration_minutes,
       is_core: course.is_core,
       program_id: course.program_id, // Send single program_id
+      program_associations: course.program_associations, // Add this for multiple programs
       semesters: course.semesters // Include semesters array
     };
     
@@ -169,6 +180,7 @@ export const updateCourse = async (id: string, course: Partial<Course>): Promise
       duration_minutes: course.duration_minutes,
       is_core: course.is_core,
       program_id: course.program_id, // Send single program_id
+      program_associations: course.program_associations, // Add this for multiple programs
       semesters: course.semesters // Include semesters array
     };
     

@@ -248,6 +248,61 @@ const CourseDetails: React.FC = () => {
         )}
       </Paper>
 
+      <Paper sx={{ p: 3, mt: 3 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>
+          Program Associations
+        </Typography>
+  
+        {course.programs && course.programs.length > 0 ? (
+          <Grid container spacing={2}>
+            {course.programs.map((program: any) => (
+              <Grid item xs={12} md={6} key={program.program_id}>
+                <Paper
+                  variant="outlined"
+                  sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}
+                >
+                  <Box>
+                    <Typography variant="body1" fontWeight="medium">
+                      {program.name}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Department: {program.department_id}
+                    </Typography>
+                    <Box sx={{ mt: 1 }}>
+                      {program.is_core === true && (
+                        <Chip 
+                          label="Core Course" 
+                          color="primary" 
+                          size="small"
+                          sx={{ mr: 1, mb: 1 }} 
+                        />
+                      )}
+                      <Chip 
+                        label={`${program.num_classes === 1 ? 'Single' : program.num_classes === 2 ? 'Dual' : 'Triple'} Class`} 
+                        color="default" 
+                        size="small"
+                        sx={{ mb: 1 }} 
+                      />
+                    </Box>
+                  </Box>
+                  <Button
+                    size="small"
+                    component={Link}
+                    to={`/admin/programs/${program.program_id}`}
+                  >
+                    View Program
+                  </Button>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        ) : (
+          <Typography variant="body2" color="text.secondary">
+            This course is not associated with any programs
+          </Typography>
+        )}
+      </Paper>
+
       <ConfirmDialog
         open={deleteDialogOpen}
         title="Delete Course"

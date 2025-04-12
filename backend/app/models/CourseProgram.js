@@ -30,6 +30,11 @@ CourseProgram.init({
     allowNull: false,
     defaultValue: false
   },
+  num_classes: {  // Add this field
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 1  // Default to single class
+  },
   created_at: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,

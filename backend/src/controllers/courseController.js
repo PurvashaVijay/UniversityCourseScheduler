@@ -33,26 +33,19 @@ exports.getAllCourses = async (req, res) => {
   }
 };
 
-// Get course by ID - Enhanced to include more information
+// In getCourseById function
 exports.getCourseById = async (req, res) => {
   try {
     const { id } = req.params;
     
     console.log(`Getting course details for ID: ${id}`);
     
+    // First, get the course with department and prerequisites
     const course = await Course.findByPk(id, {
       include: [
         {
           model: Department,
           attributes: ['department_id', 'name']
-        },
-        {
-          model: Program,
-          as: 'programs',
-          through: {
-            attributes: ['is_required']
-          },
-          attributes: ['program_id', 'name']
         },
         {
           model: Course,
@@ -69,18 +62,51 @@ exports.getCourseById = async (req, res) => {
       return res.status(404).json({ message: 'Course not found' });
     }
 
-    // Get the course programs for this course
+    // Get programs for this course by direct query to CourseProgram
     const coursePrograms = await CourseProgram.findAll({
       where: { course_id: id }
     });
 
-    // Extract program_id from the first course program
-    const program_id = coursePrograms.length > 0 ? coursePrograms[0].program_id : null;
+    // Get program details for these programs
+    const programIds = coursePrograms.map(cp => cp.program_id);
+    const programs = await Program.findAll({
+      where: {
+        program_id: programIds
+      },
+      include: [
+        {
+          model: Department,
+          attributes: ['name']
+        }
+      ]
+    });
+
+    // Create a map for quick program lookup
+    const programMap = {};
+    programs.forEach(program => {
+      programMap[program.program_id] = program;
+    });
+
+    // Merge program data with course program data
+    const programsWithDetails = coursePrograms.map(cp => {
+      const program = programMap[cp.program_id] || {};
+      return {
+        program_id: cp.program_id,
+        name: program.name || '',
+        department_id: program.department_id || '',
+        is_core: Boolean(cp.is_required),
+        num_classes: cp.num_classes || 1
+      };
+    });
 
     // Get actual semesters from database
     const courseSemesters = await CourseSemester.findAll({
       where: { course_id: id }
     });
+
+    // Get the primary program's number of classes (from the first association)
+    const primaryNumClasses = coursePrograms.length > 0 ? 
+      (coursePrograms[0].num_classes || 1) : 1;
 
     // Format the response with all the data needed by the frontend
     const result = {
@@ -89,13 +115,20 @@ exports.getCourseById = async (req, res) => {
       department_id: course.department_id,
       duration_minutes: course.duration_minutes,
       is_core: course.is_core,
-      program_id: program_id,
-      programs: course.programs,
+      program_id: coursePrograms.length > 0 ? coursePrograms[0].program_id : null,
+      numClasses: primaryNumClasses,
+      programs: programsWithDetails,
       prerequisites: course.prerequisites,
       department: course.Department,
       // Add actual semesters from the database
       semesters: courseSemesters.map(cs => cs.semester)
     };
+
+    console.log('Course programs data:', programsWithDetails.map(p => ({
+      program_id: p.program_id,
+      is_required: p.is_core, 
+      is_core: p.is_core
+    })));
 
     return res.status(200).json(result);
   } catch (error) {
@@ -204,6 +237,7 @@ exports.createCourse = async (req, res) => {
       duration_minutes, 
       is_core, 
       program_id,
+      program_associations, // New field with array of program associations
       semesters
     } = req.body;
     
@@ -240,7 +274,7 @@ exports.createCourse = async (req, res) => {
       duration_minutes: duration_minutes || 55,
       is_core: is_core || false
     });
-    
+    /*
     // Associate with program if provided
     if (program_id) {
       await CourseProgram.create({
@@ -250,7 +284,33 @@ exports.createCourse = async (req, res) => {
         is_required: is_core || false
       });
     }
-    
+    */
+    // Handle program associations
+    if (program_associations && Array.isArray(program_associations) && program_associations.length > 0) {
+      console.log('Creating program associations:', program_associations);
+  
+      // Create each program association
+      for (const association of program_associations) {
+        console.log('Creating CourseProgram with is_required:', association.is_core === true);
+        await CourseProgram.create({
+          course_program_id: `CP-${uuidv4().substring(0, 8)}`,
+          course_id: newCourse.course_id,
+          program_id: association.program_id,
+          is_required: association.is_core === true,
+          num_classes: association.num_classes || 1
+        });
+      }
+    } else if (program_id) {
+      // Backward compatibility with old format
+      await CourseProgram.create({
+        course_program_id: `CP-${uuidv4().substring(0, 8)}`,
+        course_id: newCourse.course_id,
+        program_id,
+        is_required: is_core || false,
+        num_classes: 1 // Default to single class
+      });
+    }
+
     // Handle semesters if provided
     if (semesters && Array.isArray(semesters)) {
       console.log('Creating semester associations:', semesters);
@@ -309,7 +369,8 @@ exports.updateCourse = async (req, res) => {
       name, // Accept both course_name and name
       duration_minutes, 
       is_core, 
-      program_id, 
+      program_id, // For backward compatibility
+      program_associations, // New field with array of program associations
       semesters 
     } = req.body;
     
@@ -324,7 +385,7 @@ exports.updateCourse = async (req, res) => {
     
     // Save the updated course
     await course.save();
-    
+    /*
     // Update program association if program_id is provided
     if (program_id) {
       // First, check if the course-program association already exists
@@ -345,7 +406,46 @@ exports.updateCourse = async (req, res) => {
         });
       }
     }
-    
+    */
+    // Handle program associations
+    if (program_associations && Array.isArray(program_associations)) {
+      console.log('Updating program associations:', program_associations);
+  
+      // First, remove all existing program associations
+      await CourseProgram.destroy({ where: { course_id: id } });
+  
+      // Then create new ones
+      for (const association of program_associations) {
+        await CourseProgram.create({
+          course_program_id: `CP-${uuidv4().substring(0, 8)}`,
+          course_id: id,
+          program_id: association.program_id,
+          is_required: association.is_core === true,
+          num_classes: association.num_classes || 1
+        });
+      }
+    } else if (program_id) {
+      // Backward compatibility with old format
+      // First, check if the course-program association already exists
+      const existingAssociation = await CourseProgram.findOne({
+        where: { 
+          course_id: id,
+          program_id: program_id
+        }
+      });
+  
+      if (!existingAssociation) {
+        // Create a new association
+        await CourseProgram.create({
+          course_program_id: `CP-${uuidv4().substring(0, 8)}`,
+          course_id: id,
+          program_id: program_id,
+          is_required: is_core || false,
+          num_classes: 1 // Default to single class
+        });
+      }
+    }
+
     // Update semester associations if provided
     if (semesters && Array.isArray(semesters)) {
       console.log('Updating semesters for course:', semesters);

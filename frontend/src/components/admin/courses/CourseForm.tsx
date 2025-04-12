@@ -21,8 +21,12 @@ import {
   FormControlLabel,
   Switch,
   FormGroup,
-  FormLabel
+  FormLabel,
+  TextField
 } from '@mui/material';
+
+import { Autocomplete, Chip, FormHelperText } from '@mui/material';
+
 import SaveIcon from '@mui/icons-material/Save';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { Link, useNavigate, useParams, useLocation } from 'react-router-dom';
@@ -32,6 +36,15 @@ import { TextInput, NumberInput } from '../../../components/common/FormComponent
 import departmentService from '../../../services/departmentService';
 import programService from '../../../services/programService';
 import courseService, { Course } from '../../../services/courseService';
+
+interface ProgramAssociation {
+  program_id: string;
+  name: string;
+  department_id: string;
+  is_core: boolean;
+  num_classes: number;
+}
+
 
 const CourseForm: React.FC = () => {
   const navigate = useNavigate();
@@ -44,6 +57,8 @@ const CourseForm: React.FC = () => {
   const initialProgramId = queryParams.get('programId') || '';
   
   const [programs, setPrograms] = useState<any[]>([]);
+  const [programAssociations, setProgramAssociations] = useState<ProgramAssociation[]>([]);
+  const [allPrograms, setAllPrograms] = useState<any[]>([]);
   const [selectedSemesters, setSelectedSemesters] = useState<string[]>([]);
   const [course, setCourse] = useState<{
     course_id: string;
@@ -53,6 +68,7 @@ const CourseForm: React.FC = () => {
     description: string;
     duration_minutes: number | '';
     is_core: boolean;
+    numClasses: number; // Added numClasses field
     semesters: string[];
   }>({
     course_id: '',
@@ -61,7 +77,8 @@ const CourseForm: React.FC = () => {
     name: '',
     description: '',
     duration_minutes: 55,
-    is_core: false,
+    is_core: false, // Kept for backward compatibility
+    numClasses: 1, // Default to 1
     semesters: []
   });
   
@@ -75,6 +92,7 @@ const CourseForm: React.FC = () => {
       try {
         const data = await programService.getAllPrograms();
         setPrograms(data);
+        setAllPrograms(data);
         
         // If we have programs and an initialProgramId, set the department_id
         if (data.length > 0 && initialProgramId) {
@@ -124,8 +142,24 @@ const CourseForm: React.FC = () => {
               description: data.description || '',
               duration_minutes: typeof data.duration_minutes === 'number' ? data.duration_minutes : 55,
               is_core: Boolean(data.is_core),
+              numClasses: data.numClasses || 1, // Default to 1 if not provided
               semesters: loadedSemesters  // Set the semesters here too
             });
+
+            // Add this section to handle program associations:
+            if (data.programs && Array.isArray(data.programs)) {
+              // Transform the data to ensure we have complete program association data
+              const associations = data.programs.map(prog => ({
+                program_id: prog.program_id,
+                name: prog.name || '',
+                department_id: prog.department_id || '',
+                is_core: Boolean(prog.is_core), // Ensure this is correctly cast to boolean
+                num_classes: prog.num_classes || 1
+              }));
+              
+              console.log('Processed program associations:', associations);
+              setProgramAssociations(associations);
+            }
           } else {
             setSnackbar({
               open: true,
@@ -157,6 +191,27 @@ const CourseForm: React.FC = () => {
       setLoading(false);
     }
   }, [id, isEditing, navigate, initialProgramId]);
+
+  // Add this new useEffect to initialize program associations with primary program
+  useEffect(() => {
+    // For new courses, when program_id changes, update program associations
+    if (!isEditing && course.program_id && programs.length > 0) {
+      const selectedProgram = programs.find(p => p.program_id === course.program_id);
+      
+      if (selectedProgram && !programAssociations.some(p => p.program_id === course.program_id)) {
+        setProgramAssociations(prev => [
+          ...prev,
+          {
+            program_id: course.program_id,
+            name: selectedProgram.name || '',
+            department_id: selectedProgram.department_id || '',
+            is_core: course.is_core,
+            num_classes: course.numClasses || 1
+          }
+        ]);
+      }
+    }
+  }, [course.program_id, course.is_core, course.numClasses, isEditing, programs, programAssociations]);
 
   // Update course.semesters when selectedSemesters changes
   useEffect(() => {
@@ -228,7 +283,23 @@ const CourseForm: React.FC = () => {
         ...course,
         semesters: selectedSemesters,
         course_name: course.name, // Ensure course_name is set for backend compatibility
-        duration_minutes: Number(course.duration_minutes) // Force conversion to number
+        duration_minutes: Number(course.duration_minutes), // Force conversion to number
+        // For backward compatibility, keep is_core but don't use it for program associations
+        program_associations: [ 
+          // Include the primary program association with its specific settings
+          ...(course.program_id && !programAssociations.some(p => p.program_id === course.program_id) 
+            ? [{
+                program_id: course.program_id,
+                name: programs.find(p => p.program_id === course.program_id)?.name || '',
+                department_id: course.department_id,
+                is_core: false, // Default to false - will be set by program associations
+                num_classes: course.numClasses || 1
+              }] 
+            : []),
+          ...programAssociations
+        ],
+        // Add the numClasses field for backward compatibility
+        numClasses: course.numClasses
       };
 
       console.log('Submitting course data:', courseData);
@@ -250,13 +321,17 @@ const CourseForm: React.FC = () => {
         navigate('/admin/courses');
       }, 1500);
     } catch (error) {
-      console.error('Error saving course:', error);
-      setSnackbar({
-        open: true,
-        message: `Failed to ${isEditing ? 'update' : 'create'} course`,
-        severity: 'error'
-      });
-    } finally {
+        console.error('Error saving course:', error);
+        let errorMessage = `Failed to ${isEditing ? 'update' : 'create'} course`;
+        if (error instanceof Error) {
+          errorMessage += `: ${error.message}`;
+        }
+        setSnackbar({
+          open: true,
+          message: errorMessage,
+          severity: 'error'
+        });
+      } finally {
       setSaving(false);
     }
   };
@@ -296,6 +371,19 @@ const CourseForm: React.FC = () => {
         program_id: ''
       });
     }
+    // Add the selected program to program associations if it doesn't exist
+    if (newProgramId && !programAssociations.some(p => p.program_id === newProgramId) && selectedProgram) {
+      setProgramAssociations(prev => [
+        ...prev,
+        {
+          program_id: newProgramId,
+          name: selectedProgram.name || '',
+          department_id: departmentId || '',
+          is_core: course.is_core,
+          num_classes: course.numClasses || 1
+        }
+      ]);
+    }
   };
 
   const handleDurationChange = (value: number | '') => {
@@ -313,11 +401,22 @@ const CourseForm: React.FC = () => {
     }
   };
 
-  const handleCoreChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  // Modified to handle numClasses changes
+  const handleNumClassesChange = (value: number) => {
     setCourse({
       ...course,
-      is_core: event.target.checked
+      numClasses: value
     });
+  };
+
+  const handleProgramAssociationChange = (programId: string, field: 'is_core' | 'num_classes', value: boolean | number) => {
+    setProgramAssociations(prev => 
+      prev.map(p => 
+        p.program_id === programId 
+          ? { ...p, [field]: value }
+          : p
+      )
+    );
   };
 
   if (loading) {
@@ -419,18 +518,26 @@ const CourseForm: React.FC = () => {
                 max={300}
               />
             </Grid>
-            <Grid item xs={12} md={6} sx={{ display: 'flex', alignItems: 'center' }}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={course.is_core}
-                    onChange={handleCoreChange}
-                    color="primary"
-                  />
-                }
-                label="Core Course"
-              />
+            
+            {/* Replaced Core Course toggle with Number of Classes dropdown */}
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth>
+                <InputLabel id="num-classes-global-label">
+                  Number of Classes
+                </InputLabel>
+                <Select
+                  labelId="num-classes-global-label"
+                  value={course.numClasses || 1}
+                  label="Number of Classes"
+                  onChange={(e) => handleNumClassesChange(Number(e.target.value))}
+                >
+                  <MenuItem value={1}>Single (1)</MenuItem>
+                  <MenuItem value={2}>Dual (2)</MenuItem>
+                  <MenuItem value={3}>Triple (3)</MenuItem>
+                </Select>
+              </FormControl>
             </Grid>
+            
             <Grid item xs={12} md={6}>
               <FormControl component="fieldset" sx={{ mt: 2, mb: 2 }}>
                 <FormLabel component="legend">Semester</FormLabel>
@@ -461,6 +568,137 @@ const CourseForm: React.FC = () => {
                 </Typography>
               )}
             </Grid>
+
+            <Grid item xs={12}>
+              <Typography variant="h6" sx={{ mt: 3, mb: 1 }}>Program Associations</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Select which programs this course is associated with and specify if it's core for each program
+                and the number of classes.
+              </Typography>
+  
+              <Autocomplete
+                multiple
+                id="program-associations"
+                options={allPrograms}
+                disableCloseOnSelect
+                getOptionLabel={(option) => `${option.name} (${option.department_id})`}
+                value={allPrograms.filter(p => 
+                  programAssociations.some(pa => pa.program_id === p.program_id)
+                )}
+                onChange={(_, newValue) => {
+                  // Update program associations based on selected programs
+                  setProgramAssociations(prev => {
+                    // Keep existing associations for programs that are still selected
+                      const existing = prev.filter(p => 
+                        newValue.some(nv => nv.program_id === p.program_id)
+                      );
+        
+                      // Add new associations
+                      const newAssociations = newValue
+                        .filter(nv => !existing.some(e => e.program_id === nv.program_id))
+                        .map(nv => ({
+                          program_id: nv.program_id,
+                          name: nv.name,
+                          department_id: nv.department_id,
+                          is_core: false,
+                          num_classes: 1
+                        }));
+        
+                      return [...existing, ...newAssociations];
+                    });
+                  }}
+                  renderOption={(props, option, { selected }) => (
+                    <li {...props}>
+                      <Checkbox
+                        style={{ marginRight: 8 }}
+                        checked={selected}
+                      />
+                      {option.name} ({option.department_id})
+                    </li>
+                  )}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Associated Programs"
+                      placeholder="Select programs"
+                    />
+                  )}
+                  sx={{ mb: 2 }}
+                />
+  
+                {programAssociations.length > 0 && (
+                  <Paper variant="outlined" sx={{ p: 2, mt: 2 }}>
+                    <Typography variant="subtitle1" gutterBottom>
+                      Program Settings
+                    </Typography>
+                  {programAssociations.map((association) => (
+                    <Box 
+                      key={association.program_id} 
+                      sx={{ 
+                        mb: 2, 
+                        p: 2, 
+                        border: '1px solid #e0e0e0', 
+                        borderRadius: 1,
+                        // Highlight the primary program with a different border
+                        borderColor: association.program_id === course.program_id ? '#00539F' : '#e0e0e0',
+                        borderWidth: association.program_id === course.program_id ? 2 : 1,
+                      }}
+                    >
+                      <Typography variant="subtitle2">
+                        {association.name} ({association.department_id})
+                        {association.program_id === course.program_id && (
+                          <Chip 
+                            label="Primary Program" 
+                            size="small" 
+                            color="primary" 
+                            sx={{ ml: 1 }}
+                          />
+                        )}
+                      </Typography>
+                      <Grid container spacing={2} sx={{ mt: 1 }}>
+                        <Grid item xs={12} md={6}>
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={association.is_core}
+                                onChange={(e) => handleProgramAssociationChange(
+                                  association.program_id,
+                                  'is_core',
+                                  e.target.checked
+                                )}
+                              />
+                            }
+                            label="Core Course in this Program"
+                          />
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                          <FormControl fullWidth>
+                            <InputLabel id={`num-classes-${association.program_id}`}>
+                              Number of Classes
+                            </InputLabel>
+                            <Select
+                              labelId={`num-classes-${association.program_id}`}
+                              value={association.num_classes}
+                              label="Number of Classes"
+                              onChange={(e) => handleProgramAssociationChange(
+                                association.program_id,
+                                'num_classes',
+                                Number(e.target.value)
+                              )}
+                            >
+                              <MenuItem value={1}>Single (1)</MenuItem>
+                              <MenuItem value={2}>Dual (2)</MenuItem>
+                              <MenuItem value={3}>Triple (3)</MenuItem>
+                            </Select>
+                          </FormControl>
+                        </Grid>
+                      </Grid>
+                    </Box>
+                  ))}
+                </Paper>
+              )}
+            </Grid>
+
             <Grid item xs={12} sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
               <Button
                 type="submit"
