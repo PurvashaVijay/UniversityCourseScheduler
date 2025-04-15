@@ -53,6 +53,17 @@ ScheduledCourse.init({
   override_reason: {
     type: DataTypes.TEXT
   },
+  // New fields for multiple class instances
+  class_instance: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 1
+  },
+  num_classes: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 1
+  },
   created_at: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,

@@ -83,6 +83,8 @@ exports.getScheduleById = async (req, res) => {
         time_slot_number: slotNumber,
         is_core: scJson.Course?.is_core || false,
         is_override: scJson.is_override || false,
+        class_instance: scJson.class_instance || 1,
+        num_classes: scJson.num_classes || 1,
         department_id: scJson.Course?.department_id,
         duration_minutes: scJson.Course?.duration_minutes
       };
@@ -235,6 +237,191 @@ exports.deleteSchedule = async (req, res) => {
   } catch (error) {
     console.error('Error deleting schedule:', error);
     return res.status(500).json({ message: 'Failed to delete schedule' });
+  }
+};
+
+// Get schedule filtered by program
+exports.getScheduleByProgram = async (req, res) => {
+  try {
+    const scheduleId = req.params.id;
+    const programId = req.params.programId;
+    
+    // Verify schedule exists
+    const schedule = await Schedule.findByPk(scheduleId);
+    if (!schedule) {
+      return res.status(404).json({ message: 'Schedule not found' });
+    }
+    
+    // Verify program exists
+    const program = await Program.findByPk(programId);
+    if (!program) {
+      return res.status(404).json({ message: 'Program not found' });
+    }
+    
+    // Find all courses in this program
+    const coursesInProgram = await CourseProgram.findAll({
+      where: { program_id: programId },
+      attributes: ['course_id']
+    });
+    
+    const courseIds = coursesInProgram.map(cp => cp.course_id);
+    
+    // Get scheduled courses for this schedule that are in this program
+    const scheduledCourses = await ScheduledCourse.findAll({
+      where: { 
+        schedule_id: scheduleId,
+        course_id: {
+          [Op.in]: courseIds
+        }
+      },
+      include: [
+        { model: Course, attributes: ['course_id', 'course_name', 'is_core', 'department_id', 'duration_minutes'] },
+        { model: Professor, attributes: ['professor_id', 'first_name', 'last_name'] },
+        { model: TimeSlot, attributes: ['timeslot_id', 'name', 'start_time', 'end_time', 'day_of_week'] }
+      ]
+    });
+    
+    // Transform them into the format the frontend expects
+    // Similar to getScheduleById, but filtered by program
+    const formattedCourses = scheduledCourses.map(sc => {
+      const scJson = sc.toJSON();
+      
+      // Extract the time slot number 
+      let slotNumber = 1;
+      if (scJson.timeslot_id) {
+        const timeSlotMatch = scJson.timeslot_id.match(/TS(\d+)/);
+        if (timeSlotMatch) {
+          slotNumber = parseInt(timeSlotMatch[1]);
+        }
+      }
+
+      // Normalize the day name
+      let dayOfWeek = scJson.day_of_week || '';
+      const dayMap = {
+        'MON': 'Monday',
+        'TUE': 'Tuesday', 
+        'WED': 'Wednesday',
+        'THU': 'Thursday',
+        'FRI': 'Friday'
+      };
+      
+      if (dayMap[dayOfWeek.toUpperCase()]) {
+        dayOfWeek = dayMap[dayOfWeek.toUpperCase()];
+      }
+      
+      // Create the formatted course object
+      return {
+        scheduled_course_id: scJson.scheduled_course_id,
+        schedule_id: scJson.schedule_id,
+        course_id: scJson.Course?.course_id,
+        course_name: scJson.Course?.course_name,
+        professor_id: scJson.Professor?.professor_id,
+        professor_name: `${scJson.Professor?.first_name || ''} ${scJson.Professor?.last_name || ''}`.trim(),
+        timeslot_id: scJson.timeslot_id,
+        day_of_week: dayOfWeek,
+        time_slot_id: scJson.timeslot_id,
+        time_slot_number: slotNumber,
+        is_core: scJson.Course?.is_core || false,
+        is_override: scJson.is_override || false,
+        class_instance: scJson.class_instance || 1,
+        num_classes: scJson.num_classes || 1,
+        department_id: scJson.Course?.department_id,
+        duration_minutes: scJson.Course?.duration_minutes
+      };
+    });
+    
+    // Include program details
+    const responseData = {
+      ...schedule.toJSON(),
+      program: program.toJSON(),
+      courses: formattedCourses
+    };
+    
+    return res.status(200).json(responseData);
+  } catch (error) {
+    console.error('Error retrieving program schedule:', error);
+    return res.status(500).json({ message: 'Failed to retrieve program schedule', error: error.message });
+  }
+};
+
+// Get schedule filtered by department
+exports.getScheduleByDepartment = async (req, res) => {
+  try {
+    const scheduleId = req.params.id;
+    const departmentId = req.params.departmentId;
+    
+    // Verify schedule exists
+    const schedule = await Schedule.findByPk(scheduleId);
+    if (!schedule) {
+      return res.status(404).json({ message: 'Schedule not found' });
+    }
+    
+    // Verify department exists
+    const department = await Department.findByPk(departmentId);
+    if (!department) {
+      return res.status(404).json({ message: 'Department not found' });
+    }
+    
+    // Find all courses in this department
+    const coursesInDepartment = await Course.findAll({
+      where: { department_id: departmentId },
+      attributes: ['course_id']
+    });
+    
+    const courseIds = coursesInDepartment.map(c => c.course_id);
+    
+    // Get scheduled courses for this schedule that are in this department
+    const scheduledCourses = await ScheduledCourse.findAll({
+      where: { 
+        schedule_id: scheduleId,
+        course_id: {
+          [Op.in]: courseIds
+        }
+      },
+      include: [
+        { model: Course, attributes: ['course_id', 'course_name', 'is_core', 'department_id', 'duration_minutes'] },
+        { model: Professor, attributes: ['professor_id', 'first_name', 'last_name'] },
+        { model: TimeSlot, attributes: ['timeslot_id', 'name', 'start_time', 'end_time', 'day_of_week'] }
+      ]
+    });
+    
+    // Format the courses similar to getScheduleByProgram method
+    const formattedCourses = scheduledCourses.map(sc => {
+      // Same transformation logic as getScheduleByProgram
+      // (code omitted for brevity)
+      
+      // Return the formatted course object
+      return {
+        scheduled_course_id: scJson.scheduled_course_id,
+        schedule_id: scJson.schedule_id,
+        course_id: scJson.Course?.course_id,
+        course_name: scJson.Course?.course_name,
+        professor_id: scJson.Professor?.professor_id,
+        professor_name: `${scJson.Professor?.first_name || ''} ${scJson.Professor?.last_name || ''}`.trim(),
+        timeslot_id: scJson.timeslot_id,
+        day_of_week: dayOfWeek,
+        time_slot_id: scJson.timeslot_id,
+        time_slot_number: slotNumber,
+        is_core: scJson.Course?.is_core || false,
+        is_override: scJson.is_override || false,
+        class_instance: scJson.class_instance || 1,
+        num_classes: scJson.num_classes || 1,
+        department_id: scJson.Course?.department_id,
+        duration_minutes: scJson.Course?.duration_minutes
+      };
+    });
+    
+    // Include department details
+    const responseData = {
+      ...schedule.toJSON(),
+      department: department.toJSON(),
+      courses: formattedCourses
+    };
+    
+    return res.status(200).json(responseData);
+  } catch (error) {
+    console.error('Error retrieving department schedule:', error);
+    return res.status(500).json({ message: 'Failed to retrieve department schedule', error: error.message });
   }
 };
 

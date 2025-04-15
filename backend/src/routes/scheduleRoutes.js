@@ -27,7 +27,9 @@ router.put('/:id', authenticate, authorize('admin'), scheduleController.updateSc
 router.delete('/:id', authenticate, authorize('admin'), scheduleController.deleteSchedule);
 
 
-
+// Add these routes to scheduleRoutes.js
+router.get('/:id/program/:programId', authenticate, scheduleController.getScheduleByProgram);
+router.get('/:id/department/:departmentId', authenticate, scheduleController.getScheduleByDepartment);
 // Additional routes
 router.get('/semester/:semesterId', authenticate, scheduleController.getSchedulesBySemester);
 // Add this route before the '/:id' route to avoid path conflicts

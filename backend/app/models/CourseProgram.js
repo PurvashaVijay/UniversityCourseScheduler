@@ -33,7 +33,11 @@ CourseProgram.init({
   num_classes: {  // Add this field
     type: DataTypes.INTEGER,
     allowNull: false,
-    defaultValue: 1  // Default to single class
+    defaultValue: 1,
+    validate: {
+      min: 1,
+      max: 3 // Limit to between 1 and 3 classes
+    }
   },
   created_at: {
     type: DataTypes.DATE,
