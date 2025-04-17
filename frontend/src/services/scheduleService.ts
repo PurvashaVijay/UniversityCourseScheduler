@@ -103,7 +103,6 @@ export interface Conflict {
   }[];
 }
 
-
 export interface OverrideRequest {
   schedule_id: string;
   course_id: string;
@@ -158,21 +157,48 @@ export const getScheduleById = async (scheduleId: string): Promise<Schedule | nu
 };
 
 // Get schedules by semester
-export const getSchedulesBySemester = async (semesterId: string): Promise<Schedule[]> => {
+// Get schedules by semester
+
+// Update getSchedulesBySemester in scheduleService.ts
+export const getSchedulesBySemester = async (
+  semesterId: string,
+  departmentId?: string,
+  programId?: string
+): Promise<Schedule[]> => {
   try {
     const token = authService.getToken();
     
-    const response = await fetch(`${API_URL}/schedules/semester/${semesterId}`, {
+    // Build URL with query parameters
+    let url = `${API_URL}/schedules/semester/${semesterId}`;
+    
+    // Add query parameters for department and program if they exist
+    const params = new URLSearchParams();
+    if (departmentId) params.append('department_id', departmentId);
+    if (programId) params.append('program_id', programId);
+    
+    // Append parameters to URL if they exist
+    const queryString = params.toString();
+    if (queryString) {
+      url += '?' + queryString;
+    }
+    
+    console.log('Fetching schedules with URL:', url);
+    
+    const response = await fetch(url, {
       headers: {
         'Authorization': `Bearer ${token}`
       }
     });
     
     if (!response.ok) {
-      throw new Error('Failed to fetch schedules for semester');
+      const errorText = await response.text();
+      console.error('Error response:', errorText);
+      throw new Error(`Failed to fetch schedules: ${response.status} - ${errorText}`);
     }
     
-    return await response.json();
+    const data = await response.json();
+    console.log(`Received ${data.length} schedules from API`);
+    return data;
   } catch (error) {
     console.error(`Error fetching schedules for semester ${semesterId}:`, error);
     return [];

@@ -16,7 +16,8 @@ import {
   Box,
   CircularProgress,
   Alert,
-  SelectChangeEvent
+  SelectChangeEvent,
+  FormHelperText
 } from '@mui/material';
 import scheduleService, { ScheduledCourse, TimeSlot } from '../../../services/scheduleService';
 
@@ -38,6 +39,7 @@ const CourseChangeDialog: React.FC<CourseChangeDialogProps> = ({
   const [loading, setLoading] = useState<boolean>(false);
   const [selectedDay, setSelectedDay] = useState<string>('');
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('');
+  const [allTimeSlots, setAllTimeSlots] = useState<TimeSlot[]>([]);
   const [timeSlotsByDay, setTimeSlotsByDay] = useState<{ [key: string]: TimeSlot[] }>({});
   const [notes, setNotes] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +49,9 @@ const CourseChangeDialog: React.FC<CourseChangeDialogProps> = ({
     const fetchTimeSlots = async () => {
       try {
         const data = await scheduleService.getAllTimeSlots();
+        
+        // Save all time slots
+        setAllTimeSlots(data);
         
         // Group time slots by day
         const groupedSlots: { [key: string]: TimeSlot[] } = {};
@@ -127,6 +132,49 @@ const CourseChangeDialog: React.FC<CourseChangeDialogProps> = ({
     }
   };
 
+  // Get the current time slot information
+  const getCurrentTimeSlotInfo = () => {
+    if (!scheduledCourse) return 'Unknown Time Slot';
+    
+    // If timeslot object is available with complete info
+    if (scheduledCourse.timeslot?.name && scheduledCourse.timeslot?.start_time && scheduledCourse.timeslot?.end_time) {
+      return `${scheduledCourse.timeslot.name} (${scheduledCourse.timeslot.start_time.substring(0, 5)} - ${scheduledCourse.timeslot.end_time.substring(0, 5)})`;
+    }
+    
+    // If we don't have the timeslot object but we have the ID
+    if (scheduledCourse.timeslot_id) {
+      // Try to find it in our loaded time slots
+      const timeSlot = allTimeSlots.find(ts => ts.timeslot_id === scheduledCourse.timeslot_id);
+      if (timeSlot) {
+        return `${timeSlot.name} (${timeSlot.start_time.substring(0, 5)} - ${timeSlot.end_time.substring(0, 5)})`;
+      }
+    }
+    
+    return 'Unknown Time Slot';
+  };
+
+  // Filter time slots based on course duration
+  const getFilteredTimeSlots = (day: string) => {
+    if (!scheduledCourse || !scheduledCourse.course || !day) return [];
+    
+    // Get the course duration (default to 55 if not specified)
+    const courseDuration = scheduledCourse.course.duration_minutes || 55;
+    
+    // Allow a small tolerance (±10 minutes) for matching durations
+    const minDuration = courseDuration - 10;
+    const maxDuration = courseDuration + 10;
+    
+    // Filter time slots by day and duration
+    return timeSlotsByDay[day]?.filter(slot => 
+      slot.duration_minutes >= minDuration && 
+      slot.duration_minutes <= maxDuration
+    ) || [];
+  };
+
+  // Get filtered time slots for the selected day
+  const filteredTimeSlots = selectedDay ? getFilteredTimeSlots(selectedDay) : [];
+  const hasNoCompatibleSlots = selectedDay && filteredTimeSlots.length === 0;
+
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
       <DialogTitle>
@@ -142,13 +190,18 @@ const CourseChangeDialog: React.FC<CourseChangeDialogProps> = ({
               Professor: {scheduledCourse.professor?.first_name || ''} {scheduledCourse.professor?.last_name || ''}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Currently scheduled: {scheduledCourse.day_of_week}, {scheduledCourse.timeslot?.name || 'Unknown Time Slot'}
+              Currently scheduled: {scheduledCourse.day_of_week}, {getCurrentTimeSlotInfo()}
               {scheduledCourse.is_override && (
                 <Typography variant="caption" color="warning.main" display="block">
                   This course has already been manually overridden
                 </Typography>
               )}
             </Typography>
+            {scheduledCourse.course?.duration_minutes && (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                Course duration: {scheduledCourse.course.duration_minutes} minutes
+              </Typography>
+            )}
           </Box>
         )}
 
@@ -175,7 +228,7 @@ const CourseChangeDialog: React.FC<CourseChangeDialogProps> = ({
             </Select>
           </FormControl>
 
-          <FormControl fullWidth disabled={!selectedDay || loading}>
+          <FormControl fullWidth disabled={!selectedDay || loading} error={selectedDay ? filteredTimeSlots.length === 0 : undefined}>
             <InputLabel id="timeslot-select-label">Select Time Slot</InputLabel>
             <Select
               labelId="timeslot-select-label"
@@ -184,12 +237,23 @@ const CourseChangeDialog: React.FC<CourseChangeDialogProps> = ({
               label="Select Time Slot"
               onChange={handleTimeSlotChange}
             >
-              {selectedDay && timeSlotsByDay[selectedDay]?.map((slot) => (
-                <MenuItem key={slot.timeslot_id} value={slot.timeslot_id}>
-                  {slot.name} ({slot.start_time.substring(0, 5)} - {slot.end_time.substring(0, 5)})
-                </MenuItem>
-              ))}
+              {hasNoCompatibleSlots ? (
+                <MenuItem value="" disabled>No compatible time slots available</MenuItem>
+              ) : (
+                filteredTimeSlots.map((slot) => (
+                  <MenuItem key={slot.timeslot_id} value={slot.timeslot_id}>
+                    {slot.name} ({slot.start_time.substring(0, 5)} - {slot.end_time.substring(0, 5)})
+                  </MenuItem>
+                ))
+              )}
             </Select>
+            {scheduledCourse?.course?.duration_minutes && selectedDay && (
+              <FormHelperText>
+                {hasNoCompatibleSlots 
+                  ? `No time slots available matching ${scheduledCourse.course.duration_minutes} minute duration on ${selectedDay}`
+                  : `Showing only time slots compatible with ${scheduledCourse.course.duration_minutes} minute duration`}
+              </FormHelperText>
+            )}
           </FormControl>
 
           <TextField

@@ -1,4 +1,5 @@
 // src/components/admin/schedule/ConflictManagement.tsx
+
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -27,7 +28,8 @@ import {
   FormControl,
   InputLabel,
   MenuItem,
-  Select
+  Select,
+  FormHelperText
 } from '@mui/material';
 import WarningIcon from '@mui/icons-material/Warning';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -36,12 +38,15 @@ import ThumbUpIcon from '@mui/icons-material/ThumbUp';
 import SettingsIcon from '@mui/icons-material/Settings';
 import RestoreIcon from '@mui/icons-material/Restore';
 import scheduleService, { Conflict } from '../../../services/scheduleService';
+
 interface ConflictManagementProps {
   scheduleId?: string;
   onConflictResolved?: () => void;
 }
 
-const ConflictManagement: React.FC<ConflictManagementProps> = ({ scheduleId, onConflictResolved }) => {
+const ConflictManagement: React.FC<ConflictManagementProps> = ({
+  scheduleId, onConflictResolved 
+}) => {
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [resolving, setResolving] = useState<string | null>(null);
@@ -56,6 +61,7 @@ const ConflictManagement: React.FC<ConflictManagementProps> = ({ scheduleId, onC
   const [loadingTimeSlots, setLoadingTimeSlots] = useState<boolean>(false);
   const [selectedDay, setSelectedDay] = useState<string>('');
   const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
@@ -71,11 +77,10 @@ const ConflictManagement: React.FC<ConflictManagementProps> = ({ scheduleId, onC
       console.log('Scheduled courses:', conflicts[0].scheduled_courses);
     }
   }, [conflicts]);
+
   useEffect(() => {
     console.log("ConflictManagement received scheduleId:", scheduleId);
-
     
-    // Define fetchConflicts inside useEffect to avoid dependency issues
     const fetchConflicts = async () => {
       if (!scheduleId) return;
       
@@ -96,6 +101,7 @@ const ConflictManagement: React.FC<ConflictManagementProps> = ({ scheduleId, onC
         setLoading(false);
       }
     };
+
     if (scheduleId) {
       fetchConflicts();
     } else {
@@ -104,7 +110,6 @@ const ConflictManagement: React.FC<ConflictManagementProps> = ({ scheduleId, onC
     }
   }, [scheduleId]);
 
-  // Handle resolve button click
   const handleResolveClick = (conflict: Conflict, type: 'ACCEPT' | 'OVERRIDE') => {
     setSelectedConflict(conflict);
     setResolutionType(type);
@@ -123,96 +128,93 @@ const ConflictManagement: React.FC<ConflictManagementProps> = ({ scheduleId, onC
     
     setDialogOpen(true);
   };
-  // Handle revert button click for already resolved conflicts
-// Update the handleRevertClick function in ConflictManagement.tsx
-const handleRevertClick = (conflict: Conflict) => {
-  setSelectedConflict(conflict);
-  setResolutionType('REVERT');
-  setResolutionNotes('Reverting previously resolved conflict for reconsideration.');
-  setDialogOpen(true);
-};
 
-// Modify handleResolveConflict to handle reverting
-const handleResolveConflict = async () => {
-  if (!selectedConflict) return;
-  
-  try {
-    setResolving(selectedConflict.conflict_id);
+  const handleRevertClick = (conflict: Conflict) => {
+    setSelectedConflict(conflict);
+    setResolutionType('REVERT');
+    setResolutionNotes('Reverting previously resolved conflict for reconsideration.');
+    setDialogOpen(true);
+  };
+
+  const handleResolveConflict = async () => {
+    if (!selectedConflict) return;
     
-    if (resolutionType === 'REVERT') {
-      // Reverting a previously resolved conflict
-      await scheduleService.revertConflictResolution(
-        selectedConflict.conflict_id,
-        {
-          is_resolved: false,
-          resolution_notes: resolutionNotes
+    try {
+      setResolving(selectedConflict.conflict_id);
+      
+      if (resolutionType === 'REVERT') {
+        // Reverting a previously resolved conflict
+        await scheduleService.revertConflictResolution(
+          selectedConflict.conflict_id,
+          {
+            is_resolved: false,
+            resolution_notes: resolutionNotes
+          }
+        );
+        
+        // Update local state
+        setConflicts(conflicts.map(conflict =>
+          conflict.conflict_id === selectedConflict.conflict_id
+            ? { ...conflict, is_resolved: false, resolution_notes: resolutionNotes }
+            : conflict
+        ));
+        
+        setSnackbar({
+          open: true,
+          message: 'Conflict resolution reverted successfully',
+          severity: 'success'
+        });
+      } else {
+        // Regular resolution (Accept or Override)
+        const resolutionData: any = {
+          is_resolved: true,
+          resolution_notes: resolutionNotes,
+          action: resolutionType
+        };
+        
+        // For override, include course and timeslot info
+        if (resolutionType === 'OVERRIDE' && selectedCourseToMove && selectedNewTimeSlot) {
+          resolutionData.scheduled_course_id = selectedCourseToMove;
+          resolutionData.new_timeslot_id = selectedNewTimeSlot;
         }
-      );
-      
-      // Update local state
-      setConflicts(conflicts.map(conflict => 
-        conflict.conflict_id === selectedConflict.conflict_id 
-          ? { ...conflict, is_resolved: false, resolution_notes: resolutionNotes } 
-          : conflict
-      ));
-      
-      setSnackbar({
-        open: true,
-        message: 'Conflict resolution reverted successfully',
-        severity: 'success'
-      });
-    } else {
-      // Regular resolution (Accept or Override)
-      const resolutionData: any = {
-        is_resolved: true,
-        resolution_notes: resolutionNotes,
-        action: resolutionType
-      };
-      
-      // For override, include course and timeslot info
-      if (resolutionType === 'OVERRIDE' && selectedCourseToMove && selectedNewTimeSlot) {
-        resolutionData.scheduled_course_id = selectedCourseToMove;
-        resolutionData.new_timeslot_id = selectedNewTimeSlot;
+        
+        await scheduleService.resolveConflict(
+          selectedConflict.conflict_id,
+          resolutionData
+        );
+        
+        // Update local state
+        setConflicts(conflicts.map(conflict =>
+          conflict.conflict_id === selectedConflict.conflict_id
+            ? { ...conflict, is_resolved: true, resolution_notes: resolutionNotes }
+            : conflict
+        ));
+        
+        setSnackbar({
+          open: true,
+          message: `Conflict ${resolutionType === 'ACCEPT' ? 'accepted' : 'overridden'} successfully`,
+          severity: 'success'
+        });
       }
       
-      await scheduleService.resolveConflict(
-        selectedConflict.conflict_id,
-        resolutionData
-      );
-      
-      // Update local state
-      setConflicts(conflicts.map(conflict => 
-        conflict.conflict_id === selectedConflict.conflict_id 
-          ? { ...conflict, is_resolved: true, resolution_notes: resolutionNotes } 
-          : conflict
-      ));
-      
+      if (onConflictResolved) {
+        onConflictResolved();
+      }
+    } catch (error) {
+      console.error('Error processing conflict:', error);
       setSnackbar({
         open: true,
-        message: `Conflict ${resolutionType === 'ACCEPT' ? 'accepted' : 'overridden'} successfully`,
-        severity: 'success'
+        message: `Failed to ${resolutionType === 'REVERT' ? 'revert' : 'resolve'} conflict`,
+        severity: 'error'
       });
+    } finally {
+      setResolving(null);
+      setDialogOpen(false);
+      setSelectedCourseToMove('');
+      setSelectedNewTimeSlot('');
     }
-    
-    if (onConflictResolved) {
-      onConflictResolved();
-    }
-  } catch (error) {
-    console.error('Error processing conflict:', error);
-    setSnackbar({
-      open: true,
-      message: `Failed to ${resolutionType === 'REVERT' ? 'revert' : 'resolve'} conflict`,
-      severity: 'error'
-    });
-  } finally {
-    setResolving(null);
-    setDialogOpen(false);
-    setSelectedCourseToMove('');
-    setSelectedNewTimeSlot('');
-  }
-};
+  };
 
-  // Close the resolution dialog
   const handleCloseDialog = () => {
     setDialogOpen(false);
     setSelectedConflict(null);
@@ -221,12 +223,11 @@ const handleResolveConflict = async () => {
     setSelectedNewTimeSlot('');
     setSelectedDay(''); // Reset selected day
   };
-  // Close the snackbar
+
   const handleCloseSnackbar = () => {
     setSnackbar({ ...snackbar, open: false });
   };
 
-  // Get severity level based on conflict type
   const getConflictSeverity = (type: string): 'error' | 'warning' | 'info' => {
     switch (type) {
       case 'TIME_SLOT_CONFLICT':
@@ -242,7 +243,6 @@ const handleResolveConflict = async () => {
     }
   };
 
-  // Get the appropriate icon based on conflict type and resolution status
   const getConflictIcon = (type: string, isResolved: boolean) => {
     if (isResolved) {
       return <CheckCircleIcon color="success" />;
@@ -254,7 +254,6 @@ const handleResolveConflict = async () => {
       : <WarningIcon color="warning" />;
   };
 
-  // Format conflict type to be more readable
   const getReadableConflictType = (type: string) => {
     switch (type) {
       case 'TIME_SLOT_CONFLICT':
@@ -269,7 +268,7 @@ const handleResolveConflict = async () => {
         return type.replace(/_/g, ' ');
     }
   };
-  // Fetch available time solts
+
   const fetchAvailableTimeSlots = async () => {
     try {
       setLoadingTimeSlots(true);
@@ -287,50 +286,79 @@ const handleResolveConflict = async () => {
     }
   };
 
-  // Format the time slot information
-  // Helper function to format time in 12-hour format
   const formatTime = (timeString: string | undefined): string => {
     if (!timeString) return 'N/A';
     
     try {
       const date = new Date(`1970-01-01T${timeString}`);
-      return date.toLocaleTimeString([], { 
-        hour: '2-digit', 
+      return date.toLocaleTimeString([], {
+        hour: '2-digit',
         minute: '2-digit',
-        hour12: true 
+        hour12: true
       });
     } catch (error) {
       console.error('Error formatting time:', error);
       return timeString.substring(0, 5); // Just return HH:MM as fallback
     }
   };
-// Format the time slot information using our new helper function
-const getTimeSlotInfo = (conflict: Conflict): { day: string, name: string, timeRange: string } => {
-  // Check if we have time_slot (note: this is the property name shown in your data)
-  if (conflict.time_slot) {
+
+  const getTimeSlotInfo = (conflict: Conflict): { day: string, name: string, timeRange: string } => {
+    // Check if we have time_slot (note: this is the property name shown in your data)
+    if (conflict.time_slot) {
+      return {
+        day: conflict.day_of_week || conflict.time_slot.day_of_week || 'Unknown',
+        name: conflict.time_slot.name || 'Unknown Slot',
+        timeRange: `${conflict.time_slot.start_time.substring(0, 5)} - ${conflict.time_slot.end_time.substring(0, 5)}`
+      };
+    }
+    
+    // If we at least have a day_of_week in the conflict
+    if (conflict.day_of_week) {
+      return {
+        day: conflict.day_of_week,
+        name: conflict.timeslot_id ? `Time Slot ${conflict.timeslot_id.replace(/[^0-9]/g, '')}` : 'Unknown Slot',
+        timeRange: 'Time not available'
+      };
+    }
+    
+    // Fallback for no information
     return {
-      day: conflict.day_of_week || conflict.time_slot.day_of_week || 'Unknown',
-      name: conflict.time_slot.name || 'Unknown Slot',
-      timeRange: `${conflict.time_slot.start_time.substring(0, 5)} - ${conflict.time_slot.end_time.substring(0, 5)}`
-    };
-  }
-  
-  // If we at least have a day_of_week in the conflict
-  if (conflict.day_of_week) {
-    return {
-      day: conflict.day_of_week,
-      name: conflict.timeslot_id ? `Time Slot ${conflict.timeslot_id.replace(/[^0-9]/g, '')}` : 'Unknown Slot',
+      day: 'Unknown',
+      name: 'Unknown Slot',
       timeRange: 'Time not available'
     };
-  }
-  
-  // Fallback for no information
-  return {
-    day: 'Unknown',
-    name: 'Unknown Slot',
-    timeRange: 'Time not available'
   };
-};
+  
+  // Updated getFilteredTimeSlots function to work with the actual data structure
+  const getFilteredTimeSlots = (day: string, courseToMove: string) => {
+    if (!selectedConflict || !selectedConflict.scheduled_courses || !day) return [];
+    
+    // Simple filter by day only - no duration filtering
+    return availableTimeSlots.filter(slot => 
+      slot.day_of_week === day
+    );
+  };
+  
+
+  // Prepare filtered time slots based on selections
+  const filteredTimeSlots = (selectedDay && selectedCourseToMove) 
+    ? getFilteredTimeSlots(selectedDay, selectedCourseToMove) 
+    : [];
+  
+  const hasNoCompatibleSlots = Boolean(selectedDay && selectedCourseToMove && filteredTimeSlots.length === 0);
+  
+  // Updated getSelectedCourseInfo to work with the actual data structure
+  const getSelectedCourseInfo = () => {
+    if (!selectedConflict || !selectedCourseToMove) return null;
+    
+    return selectedConflict.scheduled_courses?.find(
+      course => course.scheduled_course_id === selectedCourseToMove
+    );
+  };
+    
+  
+  const selectedCourseInfo = getSelectedCourseInfo();
+
   return (
     <Card sx={{ mt: 4 }}>
       <CardContent>
@@ -386,54 +414,54 @@ const getTimeSlotInfo = (conflict: Conflict): { day: string, name: string, timeR
                         />
                       </TableCell>
                       <TableCell>
-  {(() => {
-    // Try to get time slot info from multiple places, in order of preference
-    let timeSlotInfo = conflict.time_slot || conflict.timeslot_info || conflict.timeslot;
-    
-    // If no direct time slot info, check scheduled courses
-    if (!timeSlotInfo && conflict.scheduled_courses && conflict.scheduled_courses.length > 0) {
-      const firstCourse = conflict.scheduled_courses[0];
-      timeSlotInfo = firstCourse.timeslot;
-    }
-    
-    if (timeSlotInfo) {
-      return (
-        <>
-          <Typography variant="body2" fontWeight="medium">
-            {conflict.day_of_week || timeSlotInfo.day_of_week || 'Unknown'}
-          </Typography>
-          <Typography variant="caption" display="block">
-            {timeSlotInfo.name || 'Unknown Slot'}
-          </Typography>
-          <Typography variant="caption" color="text.secondary" display="block">
-            {timeSlotInfo.start_time && timeSlotInfo.end_time ? 
-              `${timeSlotInfo.start_time.substring(0, 5)} - ${timeSlotInfo.end_time.substring(0, 5)}` :
-              'Time not available'}
-          </Typography>
-        </>
-      );
-    } else {
-      // For conflicts with NO_AVAILABLE_SLOT type, show just the day
-      if (conflict.conflict_type === 'NO_AVAILABLE_SLOT') {
-        return (
-          <>
-            <Typography variant="body2" fontWeight="medium">
-              {conflict.day_of_week || 'Unknown'}
-            </Typography>
-          </>
-        );
-      }
-      
-      return (
-        <>
-          <Typography variant="body2" fontWeight="medium">
-            {conflict.day_of_week || 'Unknown'}
-          </Typography>
-        </>
-      );
-    }
-  })()}
-</TableCell>
+                        {(() => {
+                          // Try to get time slot info from multiple places, in order of preference
+                          let timeSlotInfo = conflict.time_slot || conflict.timeslot_info || conflict.timeslot;
+                          
+                          // If no direct time slot info, check scheduled courses
+                          if (!timeSlotInfo && conflict.scheduled_courses && conflict.scheduled_courses.length > 0) {
+                            const firstCourse = conflict.scheduled_courses[0];
+                            timeSlotInfo = firstCourse.timeslot;
+                          }
+                          
+                          if (timeSlotInfo) {
+                            return (
+                              <>
+                                <Typography variant="body2" fontWeight="medium">
+                                  {conflict.day_of_week || timeSlotInfo.day_of_week || 'Unknown'}
+                                </Typography>
+                                <Typography variant="caption" display="block">
+                                  {timeSlotInfo.name || 'Unknown Slot'}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary" display="block">
+                                  {timeSlotInfo.start_time && timeSlotInfo.end_time ?
+                                    `${timeSlotInfo.start_time.substring(0, 5)} - ${timeSlotInfo.end_time.substring(0, 5)}` :
+                                    'Time not available'}
+                                </Typography>
+                              </>
+                            );
+                          } else {
+                            // For conflicts with NO_AVAILABLE_SLOT type, show just the day
+                            if (conflict.conflict_type === 'NO_AVAILABLE_SLOT') {
+                              return (
+                                <>
+                                  <Typography variant="body2" fontWeight="medium">
+                                    {conflict.day_of_week || 'Unknown'}
+                                  </Typography>
+                                </>
+                              );
+                            }
+                            
+                            return (
+                              <>
+                                <Typography variant="body2" fontWeight="medium">
+                                  {conflict.day_of_week || 'Unknown'}
+                                </Typography>
+                              </>
+                            );
+                          }
+                        })()}
+                      </TableCell>
                       <TableCell>
                         <Typography variant="body2">
                           {conflict.description}
@@ -526,170 +554,200 @@ const getTimeSlotInfo = (conflict: Conflict): { day: string, name: string, timeR
       </CardContent>
       
       <Dialog open={dialogOpen} onClose={handleCloseDialog}>
-  <DialogTitle>
-    {resolutionType === 'ACCEPT' ? 'Accept Conflict' : 
-     resolutionType === 'OVERRIDE' ? 'Override Conflict' : 
-     'Revert Resolution'}
-  </DialogTitle>
-  <DialogContent>
-  <DialogContentText sx={{ mb: 2 }}>
-    {selectedConflict?.description}
-  </DialogContentText>
-  
-  {/* Display conflict time information */}
-  {selectedConflict && (
-    <Box sx={{ mb: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
-      <Typography variant="subtitle2" gutterBottom>
-        Conflict Details:
-      </Typography>
-      <Typography variant="body2">
-        <strong>Day:</strong> {(() => {
-          const timeInfo = selectedConflict ? getTimeSlotInfo(selectedConflict) : { day: 'N/A', name: 'N/A', timeRange: 'N/A' };
-          return timeInfo.day;
-        })()}
-      </Typography>
-      <Typography variant="body2">
-        <strong>Time Slot:</strong> {(() => {
-          const timeInfo = selectedConflict ? getTimeSlotInfo(selectedConflict) : { day: 'N/A', name: 'N/A', timeRange: 'N/A' };
-          return `${timeInfo.name} (${timeInfo.timeRange})`;
-        })()}
-      </Typography>
-      <Typography variant="body2">
-        <strong>Type:</strong> {getReadableConflictType(selectedConflict.conflict_type)}
-      </Typography>
-    </Box>
-  )}
-  
-  {/* Show conflicting courses */}
-  <Typography variant="subtitle2" gutterBottom>
-    Conflicting Courses:
-  </Typography>
-  <Box sx={{ mb: 2 }}>
-    {selectedConflict?.scheduled_courses?.map(course => (
-      <Box key={course.scheduled_course_id} sx={{ mb: 1, p: 1, border: '1px solid #eee', borderRadius: 1 }}>
-        <Typography variant="body2" fontWeight="bold">
-          {course.course_id} - {course.course_name || 'Unknown Course'}
-        </Typography>
-        <Typography variant="caption" display="block">
-          Professor: {course.professor_name || 'Unknown Professor'}
-        </Typography>
-        {course.timeslot && (
-          <Typography variant="caption" color="text.secondary" display="block">
-            Scheduled: {course.timeslot.day_of_week || course.day_of_week || 'Unknown Day'}, {formatTime(course.timeslot.start_time)} - {formatTime(course.timeslot.end_time)}
-          </Typography>
-        )}
-      </Box>
-    ))}
-  </Box>
-    
-    {/* Course selection for override */}
-    {resolutionType === 'OVERRIDE' && (
-      <>
-        <FormControl fullWidth sx={{ mt: 2, mb: 2 }}>
-          <InputLabel id="course-select-label">Select course to move</InputLabel>
-          <Select
-            labelId="course-select-label"
-            value={selectedCourseToMove}
-            onChange={(e) => setSelectedCourseToMove(e.target.value)}
-            label="Select course to move"
-          >
-            {selectedConflict?.scheduled_courses?.map(course => (
-              <MenuItem key={course.scheduled_course_id} value={course.scheduled_course_id}>
-                {course.course_id} - {course.course_name || 'Unknown Course'}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+        <DialogTitle>
+          {resolutionType === 'ACCEPT' ? 'Accept Conflict' :
+           resolutionType === 'OVERRIDE' ? 'Override Conflict' :
+           'Revert Resolution'}
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            {selectedConflict?.description}
+          </DialogContentText>
         
-        {/* Day selection dropdown */}
-        <FormControl fullWidth sx={{ mt: 2, mb: 2 }}>
-          <InputLabel id="day-select-label">Select day</InputLabel>
-          <Select
-            labelId="day-select-label"
-            value={selectedDay}
-            onChange={(e) => {
-              setSelectedDay(e.target.value);
-              setSelectedNewTimeSlot(''); // Reset time slot when day changes
-            }}
-            label="Select day"
-            disabled={loadingTimeSlots || !selectedCourseToMove}
+          {/* Display conflict time information */}
+          {selectedConflict && (
+            <Box sx={{ mb: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
+              <Typography variant="subtitle2" gutterBottom>
+                Conflict Details:
+              </Typography>
+              <Typography variant="body2">
+                <strong>Day:</strong> {(() => {
+                  const timeInfo = selectedConflict ? getTimeSlotInfo(selectedConflict) : { day: 'N/A', name: 'N/A', timeRange: 'N/A' };
+                  return timeInfo.day;
+                })()}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Time Slot:</strong> {(() => {
+                  const timeInfo = selectedConflict ? getTimeSlotInfo(selectedConflict) : { day: 'N/A', name: 'N/A', timeRange: 'N/A' };
+                  return `${timeInfo.name} (${timeInfo.timeRange})`;
+                })()}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Type:</strong> {getReadableConflictType(selectedConflict.conflict_type)}
+              </Typography>
+            </Box>
+          )}
+        
+          {/* Show conflicting courses */}
+          <Typography variant="subtitle2" gutterBottom>
+            Conflicting Courses:
+          </Typography>
+          <Box sx={{ mb: 2 }}>
+            {selectedConflict?.scheduled_courses?.map(course => (
+              <Box key={course.scheduled_course_id} sx={{ mb: 1, p: 1, border: '1px solid #eee', borderRadius: 1 }}>
+                <Typography variant="body2" fontWeight="bold">
+                  {course.course_id} - {course.course_name || 'Unknown Course'}
+                </Typography>
+                <Typography variant="caption" display="block">
+                  Professor: {course.professor_name || 'Unknown Professor'}
+                </Typography>
+                {course.timeslot && (
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    Scheduled: {course.timeslot.day_of_week || course.day_of_week || 'Unknown Day'},
+                    {formatTime(course.timeslot.start_time)} - {formatTime(course.timeslot.end_time)}
+                  </Typography>
+                )}
+                
+                
+              </Box>
+            ))}
+          </Box>
+          
+          {/* Course selection for override */}
+          {resolutionType === 'OVERRIDE' && (
+            <>
+              <FormControl fullWidth sx={{ mt: 2, mb: 2 }}>
+                <InputLabel id="course-select-label">Select course to move</InputLabel>
+                <Select
+                  labelId="course-select-label"
+                  value={selectedCourseToMove}
+                  onChange={(e) => {
+                    setSelectedCourseToMove(e.target.value);
+                    setSelectedNewTimeSlot(''); // Reset time slot when course changes
+                  }}
+                  label="Select course to move"
+                >
+                  {selectedConflict?.scheduled_courses?.map(course => (
+                    <MenuItem key={course.scheduled_course_id} value={course.scheduled_course_id}>
+                      {course.course_id} - {course.course_name || 'Unknown Course'}
+                      
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              
+              {/* Day selection dropdown */}
+              <FormControl fullWidth sx={{ mt: 2, mb: 2 }}>
+                <InputLabel id="day-select-label">Select day</InputLabel>
+                <Select
+                  labelId="day-select-label"
+                  value={selectedDay}
+                  onChange={(e) => {
+                    setSelectedDay(e.target.value);
+                    setSelectedNewTimeSlot(''); // Reset time slot when day changes
+                  }}
+                  label="Select day"
+                  disabled={loadingTimeSlots || !selectedCourseToMove}
+                >
+                  {loadingTimeSlots ? (
+                    <MenuItem value="">
+                      <CircularProgress size={20} sx={{ mr: 1 }} /> Loading days...
+                    </MenuItem>
+                  ) : (
+                    DAYS_OF_WEEK.map(day => (
+                      <MenuItem key={day} value={day}>
+                        {day}
+                      </MenuItem>
+                    ))
+                  )}
+                </Select>
+              </FormControl>
+              
+              {/* Time slot selection dropdown - now with duration filtering */}
+              <FormControl 
+                fullWidth 
+                sx={{ mt: 2, mb: 2 }} 
+                disabled={!selectedDay || !selectedCourseToMove || loadingTimeSlots}
+                error={hasNoCompatibleSlots}
+              >
+                <InputLabel id="timeslot-select-label">Select time slot</InputLabel>
+                <Select
+                  labelId="timeslot-select-label"
+                  value={selectedNewTimeSlot}
+                  onChange={(e) => setSelectedNewTimeSlot(e.target.value)}
+                  label="Select time slot"
+                >
+                  {loadingTimeSlots ? (
+                    <MenuItem value="">
+                      <CircularProgress size={20} sx={{ mr: 1 }} /> Loading time slots...
+                    </MenuItem>
+                  ) : hasNoCompatibleSlots ? (
+                    <MenuItem value="" disabled>
+                      No compatible time slots available
+                    </MenuItem>
+                  ) : (
+                    filteredTimeSlots.map(slot => (
+                      <MenuItem key={slot.timeslot_id} value={slot.timeslot_id}>
+                        {slot.name} ({slot.start_time.substring(0, 5)} - {slot.end_time.substring(0, 5)})
+                      </MenuItem>
+                    ))
+                  )}
+                </Select>
+                {selectedDay && (
+  <FormHelperText>
+    {hasNoCompatibleSlots 
+      ? `No time slots available on ${selectedDay}`
+      : `Select a time slot for this course`}
+  </FormHelperText>
+)}
+              </FormControl>
+            </>
+          )}
+          
+          <TextField
+            autoFocus
+            label="Resolution Notes"
+            fullWidth
+            multiline
+            rows={4}
+            value={resolutionNotes}
+            onChange={(e) => setResolutionNotes(e.target.value)}
+            placeholder={
+              resolutionType === 'ACCEPT' ? "Explain why this conflict is acceptable (e.g., temporary situation, special arrangement)" :
+              resolutionType === 'OVERRIDE' ? "Explain how this conflict should be overridden (e.g., move to a different time slot, assign different professor)" :
+              "Explain why you're reverting the previous resolution"
+            }
+            sx={{ mt: 2 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDialog} color="inherit">Cancel</Button>
+          <Button
+            onClick={handleResolveConflict}
+            color={
+              resolutionType === 'ACCEPT' ? 'primary' :
+              resolutionType === 'OVERRIDE' ? 'secondary' :
+              'warning'
+            }
+            disabled={
+              !resolutionNotes.trim() || 
+              (resolutionType === 'OVERRIDE' && (!selectedCourseToMove || !selectedNewTimeSlot))
+            }
+            startIcon={
+              resolutionType === 'ACCEPT' ? <ThumbUpIcon /> :
+              resolutionType === 'OVERRIDE' ? <SettingsIcon /> :
+              <RestoreIcon />
+            }
           >
-            {loadingTimeSlots ? (
-              <MenuItem value="">
-                <CircularProgress size={20} sx={{ mr: 1 }} /> Loading days...
-              </MenuItem>
-            ) : (
-              DAYS_OF_WEEK.map(day => (
-                <MenuItem key={day} value={day}>
-                  {day}
-                </MenuItem>
-              ))
-            )}
-          </Select>
-        </FormControl>
-
-        {/* Time slot selection dropdown - only enabled when day is selected */}
-        <FormControl fullWidth sx={{ mt: 2, mb: 2 }} disabled={!selectedDay || loadingTimeSlots}>
-          <InputLabel id="timeslot-select-label">Select time slot</InputLabel>
-          <Select
-            labelId="timeslot-select-label"
-            value={selectedNewTimeSlot}
-            onChange={(e) => setSelectedNewTimeSlot(e.target.value)}
-            label="Select time slot"
-          >
-            {availableTimeSlots
-              .filter(slot => slot.day_of_week === selectedDay)
-              .map(slot => (
-                <MenuItem key={slot.timeslot_id} value={slot.timeslot_id}>
-                  {slot.name} ({slot.start_time.substring(0, 5)} - {slot.end_time.substring(0, 5)})
-                </MenuItem>
-              ))}
-          </Select>
-        </FormControl>
-      </>
-    )}
-    
-    <TextField
-      autoFocus
-      label="Resolution Notes"
-      fullWidth
-      multiline
-      rows={4}
-      value={resolutionNotes}
-      onChange={(e) => setResolutionNotes(e.target.value)}
-      placeholder={
-        resolutionType === 'ACCEPT' ? "Explain why this conflict is acceptable (e.g., temporary situation, special arrangement)" :
-        resolutionType === 'OVERRIDE' ? "Explain how this conflict should be overridden (e.g., move to a different time slot, assign different professor)" :
-        "Explain why you're reverting the previous resolution"
-      }
-      sx={{ mt: 2 }}
-    />
-  </DialogContent>
-  <DialogActions>
-    <Button onClick={handleCloseDialog} color="inherit">Cancel</Button>
-    <Button
-      onClick={handleResolveConflict}
-      color={
-        resolutionType === 'ACCEPT' ? 'primary' : 
-        resolutionType === 'OVERRIDE' ? 'secondary' :
-        'warning'
-      }
-      disabled={!resolutionNotes.trim() || (resolutionType === 'OVERRIDE' && (!selectedCourseToMove || !selectedNewTimeSlot))}
-      startIcon={
-        resolutionType === 'ACCEPT' ? <ThumbUpIcon /> : 
-        resolutionType === 'OVERRIDE' ? <SettingsIcon /> :
-        <RestoreIcon />
-      }
-    >
-      {resolving ? 
-        <CircularProgress size={24} /> :
-        (resolutionType === 'ACCEPT' ? 'Accept Conflict' : 
-         resolutionType === 'OVERRIDE' ? 'Override Conflict' : 
-         'Revert Resolution')
-      }
-    </Button>
-  </DialogActions>
-</Dialog>
+            {resolving ?
+              <CircularProgress size={24} /> :
+              (resolutionType === 'ACCEPT' ? 'Accept Conflict' :
+               resolutionType === 'OVERRIDE' ? 'Override Conflict' :
+               'Revert Resolution')
+            }
+          </Button>
+        </DialogActions>
+      </Dialog>
       
       <Snackbar
         open={snackbar.open}
@@ -706,3 +764,4 @@ const getTimeSlotInfo = (conflict: Conflict): { day: string, name: string, timeR
 };
 
 export default ConflictManagement;
+
