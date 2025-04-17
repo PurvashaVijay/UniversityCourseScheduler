@@ -31,7 +31,20 @@ Conflict.init({
   },
   conflict_type: {
     type: DataTypes.STRING(50),
-    allowNull: false
+    allowNull: false,
+    // Expand the conflict types to include new ones
+    validate: {
+      isIn: [
+        [
+          'NO_AVAILABLE_SLOT', 
+          'TIME_SLOT_CONFLICT', 
+          'MANUAL_OVERRIDE_CONFLICT',
+          'CONSECUTIVE_SLOT_CONFLICT',
+          'DAY_PATTERN_CONFLICT',
+          'TIME_SLOT_CONSISTENCY_CONFLICT'
+        ]
+      ]
+    }
   },
   description: {
     type: DataTypes.TEXT,

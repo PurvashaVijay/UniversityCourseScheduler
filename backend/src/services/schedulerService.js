@@ -1,5 +1,7 @@
 // schedulerService.js - UPDATED
-const { Course, Department, Program, Professor, TimeSlot, ProfessorAvailability, Schedule, ScheduledCourse, Conflict, ConflictCourse, CourseProgram } = require('../../app/models');
+// Add this line with your other model imports at the top of schedulerService.js
+const { Course, Department, Program, Professor, TimeSlot, ProfessorAvailability, Schedule, ScheduledCourse, Conflict, ConflictCourse, CourseProgram, ProfessorCourse } = require('../../app/models');
+//const { Course, Department, Program, Professor, TimeSlot, ProfessorAvailability, Schedule, ScheduledCourse, Conflict, ConflictCourse, CourseProgram } = require('../../app/models');
 const { v4: uuidv4 } = require('uuid');
 const { spawn } = require('child_process');
 const path = require('path');
@@ -230,94 +232,101 @@ class SchedulerService {
       console.error('Error creating fallback schedule:', error);
     }
   }
-
-  /**
-   * Prepare input data for the Python scheduler
-   */
+  
+  // In the prepareSchedulerInput method, modify how courses are prepared:
   async prepareSchedulerInput(scheduleId, semesterId) {
     try {
-      // Get all courses
-      const courses = await Course.findAll({
-        include: [
-          { model: Department, attributes: ['name'] }
-        ],
-        order: [
-          ['is_core', 'DESC'],
-          ['course_name', 'ASC']
-        ]
-      });
+        // Get all courses
+        const courses = await Course.findAll({
+            include: [
+                { model: Department, attributes: ['name'] }
+            ],
+            order: [
+                ['is_core', 'DESC'],
+                ['course_name', 'ASC']
+            ]
+        });
 
-      // Get all professors
-      const professors = await Professor.findAll({
-        include: [
-          { model: Department, attributes: ['name'] }
-        ]
-      });
-
-      // Get all time slots
-      const timeSlots = await TimeSlot.findAll({
-        order: [
-          ['day_of_week', 'ASC'],
-          ['start_time', 'ASC']
-        ]
-      });
-
-      // Get professor availability
-      const professorAvailability = await ProfessorAvailability.findAll();
-
-      // Get course-program associations
-      const coursePrograms = await CourseProgram.findAll();
+        // Get all course-program associations to determine num_classes
+        const coursePrograms = await CourseProgram.findAll();
       
-      // Create a map of course IDs to programs
-      const courseProgramMap = {};
-      coursePrograms.forEach(cp => {
-        if (!courseProgramMap[cp.course_id]) {
-          courseProgramMap[cp.course_id] = [];
+        // Create a map of course to num_classes (get the max across all programs)
+        const courseNumClassesMap = {};
+        for (const cp of coursePrograms) {
+            const courseId = cp.course_id;
+            const numClasses = cp.num_classes || 1; // Default to 1 if not specified
+          
+            // Take the maximum num_classes for courses in multiple programs
+            if (!courseNumClassesMap[courseId] || numClasses > courseNumClassesMap[courseId]) {
+                courseNumClassesMap[courseId] = numClasses;
+            }
         }
-        courseProgramMap[cp.course_id].push(cp.program_id);
-      });
 
-      // Get professor-course relationships
-      const ProfessorCourse = require('../../app/models/ProfessorCourse');
-      const professorCourses = await ProfessorCourse.findAll();
+        // Format courses with program IDs and num_classes
+        const formattedCourses = courses.map(course => {
+            const courseJson = course.toJSON();
+          
+            // Get program IDs for this course
+            const programIds = coursePrograms
+                .filter(cp => cp.course_id === course.course_id)
+                .map(cp => cp.program_id);
+          
+            // Get num_classes for this course, default to 1
+            const numClasses = courseNumClassesMap[course.course_id] || 1;
+          
+            return {
+                ...courseJson,
+                program_ids: programIds,
+                num_classes: numClasses
+            };
+        });
 
-      // Format professor-course relationships for the Python scheduler
-      const formattedProfessorCourses = professorCourses.map(pc => ({
-        professor_id: pc.professor_id,
-        course_id: pc.course_id,
-        semester: pc.semester
-      }));
-    
-      console.log(`Found ${formattedProfessorCourses.length} professor-course relationships`);
+        // Get all professors
+        const professors = await Professor.findAll({
+            include: [
+                { model: Department, attributes: ['name'] }
+            ]
+        });
 
-      // Format courses with program IDs
-      const formattedCourses = courses.map(course => {
-        const courseJson = course.toJSON();
+        // Get all time slots
+        const timeSlots = await TimeSlot.findAll({
+            order: [
+                ['day_of_week', 'ASC'],
+                ['start_time', 'ASC']
+            ]
+        });
+
+        // Get professor availability
+        const professorAvailability = await ProfessorAvailability.findAll();
+      
+        // Get professor-course relationships
+        const professorCourses = await ProfessorCourse.findAll();
+
+        // Format professor-course relationships for the Python scheduler
+        const formattedProfessorCourses = professorCourses.map(pc => ({
+            professor_id: pc.professor_id,
+            course_id: pc.course_id,
+            semester: pc.semester
+        }));
+  
+        console.log(`Found ${formattedProfessorCourses.length} professor-course relationships`);
+        console.log(`Preparing data: ${formattedCourses.length} courses, ${professors.length} professors, ${timeSlots.length} time slots`);
+
+        // Format data for the Python scheduler
         return {
-          ...courseJson,
-          program_ids: courseProgramMap[course.course_id] || []
+            scheduleId,
+            semesterId,
+            courses: formattedCourses,
+            professors: professors.map(p => p.toJSON()),
+            timeSlots: timeSlots.map(t => t.toJSON()),
+            professorAvailability: professorAvailability.map(pa => pa.toJSON()),
+            professorCourses: formattedProfessorCourses
         };
-      });
-
-      // Log counts for debugging
-      console.log(`Preparing data: ${formattedCourses.length} courses, ${professors.length} professors, ${timeSlots.length} time slots`);
-
-      // Format data for the Python scheduler
-      return {
-        scheduleId,
-        semesterId,
-        courses: formattedCourses,
-        professors: professors.map(p => p.toJSON()),
-        timeSlots: timeSlots.map(t => t.toJSON()),
-        professorAvailability: professorAvailability.map(pa => pa.toJSON()),
-        professorCourses: formattedProfessorCourses
-      };
     } catch (error) {
-      console.error('Error preparing scheduler input:', error);
-      throw error;
+        console.error('Error preparing scheduler input:', error);
+        throw error;
     }
   }
- 
   
   /**
    * Call the Python scheduler with the input data
@@ -459,85 +468,91 @@ class SchedulerService {
   }
   
   /**
-   * Process the solution from the Python scheduler and save to database
-   */
+  * Process the solution from the Python scheduler and save to database
+  */
   async processSolution(solution, scheduleId) {
-    try {
-      console.log(`Processing solution for schedule ${scheduleId}`);
-      console.log(`Scheduled courses: ${solution.scheduled_courses.length}`);
-      console.log(`Conflicts: ${solution.conflicts.length}`);
-      
-      // Create scheduled courses
-      if (solution.scheduled_courses && solution.scheduled_courses.length > 0) {
-        const scheduledCoursesToCreate = solution.scheduled_courses.map(course => ({
-          scheduled_course_id: course.scheduled_course_id,
-          schedule_id: scheduleId,
-          course_id: course.course_id,
-          professor_id: course.professor_id,
-          timeslot_id: course.timeslot_id,
-          day_of_week: course.day_of_week,
-          is_override: course.is_override || false
-        }));
+      try {
+          console.log(`Processing solution for schedule ${scheduleId}`);
+          console.log(`Scheduled courses: ${solution.scheduled_courses.length}`);
+          console.log(`Conflicts: ${solution.conflicts.length}`);
         
-        await ScheduledCourse.bulkCreate(scheduledCoursesToCreate);
-        console.log(`Created ${scheduledCoursesToCreate.length} scheduled courses`);
-      }
-      
-      // Create conflicts
-      if (solution.conflicts && solution.conflicts.length > 0) {
-        for (const conflictData of solution.conflicts) {
-          // Create the conflict record
-          const conflict = await Conflict.create({
-            conflict_id: conflictData.conflict.conflict_id,
-            schedule_id: scheduleId,
-            timeslot_id: conflictData.conflict.timeslot_id,
-            day_of_week: conflictData.conflict.day_of_week,
-            conflict_type: conflictData.conflict.conflict_type,
-            description: conflictData.conflict.description,
-            is_resolved: conflictData.conflict.is_resolved || false
-          });
-          
-          // Handle NO_AVAILABLE_SLOT conflicts
-          if (conflictData.conflict.conflict_type === 'NO_AVAILABLE_SLOT' && conflictData.scheduled_course) {
-            // Create the scheduled course for this conflict
-            const scheduledCourse = await ScheduledCourse.create({
-              scheduled_course_id: conflictData.scheduled_course.scheduled_course_id,
-              schedule_id: scheduleId,
-              course_id: conflictData.scheduled_course.course_id,
-              professor_id: conflictData.scheduled_course.professor_id,
-              timeslot_id: conflictData.scheduled_course.timeslot_id,
-              day_of_week: conflictData.scheduled_course.day_of_week,
-              is_override: conflictData.scheduled_course.is_override || false
-            });
+          // Create scheduled courses
+          if (solution.scheduled_courses && solution.scheduled_courses.length > 0) {
+              const scheduledCoursesToCreate = solution.scheduled_courses.map(course => ({
+                  scheduled_course_id: course.scheduled_course_id,
+                  schedule_id: scheduleId,
+                  course_id: course.course_id,
+                  professor_id: course.professor_id,
+                  timeslot_id: course.timeslot_id,
+                  day_of_week: course.day_of_week,
+                  is_override: course.is_override || false,
+                  class_instance: course.class_instance || 1, // Track which instance this is (1-based)
+                  num_classes: course.num_classes || 1, // Store total number of classes
+                  override_reason: course.override_reason || null
+              }));
             
-            // Create the association between the conflict and the scheduled course
-            await ConflictCourse.create({
-              conflict_course_id: conflictData.conflict_course.conflict_course_id,
-              conflict_id: conflict.conflict_id,
-              scheduled_course_id: scheduledCourse.scheduled_course_id
-            });
+              await ScheduledCourse.bulkCreate(scheduledCoursesToCreate);
+              console.log(`Created ${scheduledCoursesToCreate.length} scheduled courses`);
           }
-          // Handle TIME_SLOT_CONFLICT conflicts
-          else if (conflictData.conflict.conflict_type === 'TIME_SLOT_CONFLICT' && 
-                  conflictData.scheduled_courses && 
-                  conflictData.conflict_courses) {
-            // Create associations for all scheduled courses involved in this conflict
-            for (let i = 0; i < conflictData.conflict_courses.length; i++) {
-              await ConflictCourse.create({
-                conflict_course_id: conflictData.conflict_courses[i].conflict_course_id,
-                conflict_id: conflict.conflict_id,
-                scheduled_course_id: conflictData.scheduled_courses[i].scheduled_course_id
-              });
-            }
-          }
-        }
         
-        console.log(`Created ${solution.conflicts.length} conflicts`);
+          // Create conflicts
+          if (solution.conflicts && solution.conflicts.length > 0) {
+              for (const conflictData of solution.conflicts) {
+                  // Create the conflict record
+                  const conflict = await Conflict.create({
+                      conflict_id: conflictData.conflict.conflict_id,
+                      schedule_id: scheduleId,
+                      timeslot_id: conflictData.conflict.timeslot_id,
+                      day_of_week: conflictData.conflict.day_of_week,
+                      conflict_type: conflictData.conflict.conflict_type,
+                      description: conflictData.conflict.description,
+                      is_resolved: conflictData.conflict.is_resolved || false
+                  });
+                
+                  // Handle different conflict types
+                  if (conflictData.conflict.conflict_type === 'NO_AVAILABLE_SLOT' && conflictData.scheduled_course) {
+                      // Create the scheduled course for this conflict
+                      const scheduledCourse = await ScheduledCourse.create({
+                          scheduled_course_id: conflictData.scheduled_course.scheduled_course_id,
+                          schedule_id: scheduleId,
+                          course_id: conflictData.scheduled_course.course_id,
+                          professor_id: conflictData.scheduled_course.professor_id,
+                          timeslot_id: conflictData.scheduled_course.timeslot_id,
+                          day_of_week: conflictData.scheduled_course.day_of_week,
+                          is_override: conflictData.scheduled_course.is_override || false,
+                          class_instance: conflictData.scheduled_course.class_instance || 1,
+                          num_classes: conflictData.scheduled_course.num_classes || 1
+                      });
+                    
+                      // Create the association between the conflict and the scheduled course
+                      await ConflictCourse.create({
+                          conflict_course_id: conflictData.conflict_course.conflict_course_id,
+                          conflict_id: conflict.conflict_id,
+                          scheduled_course_id: scheduledCourse.scheduled_course_id
+                      });
+                  }
+                  // Handle TIME_SLOT_CONFLICT or CONSECUTIVE_SLOT_CONFLICT
+                  else if ((conflictData.conflict.conflict_type === 'TIME_SLOT_CONFLICT' || 
+                          conflictData.conflict.conflict_type === 'CONSECUTIVE_SLOT_CONFLICT') && 
+                        conflictData.scheduled_courses && 
+                        conflictData.conflict_courses) {
+                      // Create associations for all scheduled courses involved in this conflict
+                      for (let i = 0; i < conflictData.conflict_courses.length; i++) {
+                          await ConflictCourse.create({
+                              conflict_course_id: conflictData.conflict_courses[i].conflict_course_id,
+                              conflict_id: conflict.conflict_id,
+                              scheduled_course_id: conflictData.scheduled_courses[i].scheduled_course_id
+                          });
+                      }
+                  }
+              }
+            
+            console.log(`Created ${solution.conflicts.length} conflicts`);
+          }
+      } catch (error) {
+          console.error('Error processing solution:', error);
+          throw error;
       }
-    } catch (error) {
-      console.error('Error processing solution:', error);
-      throw error;
-    }
   }
 }
 

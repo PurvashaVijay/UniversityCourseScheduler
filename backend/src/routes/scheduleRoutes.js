@@ -11,7 +11,8 @@ const router = express.Router();
 //router.post('/', scheduleController.createSchedule);
 //router.put('/:id', scheduleController.updateSchedule);
 //router.delete('/:id', scheduleController.deleteSchedule);
-
+// Add this debug route
+router.get('/debug/courses', authenticate, scheduleController.debugCourseData);
 // Additional routes
 //router.get('/semester/:semesterId', scheduleController.getSchedulesBySemester);
 //router.get('/:id/conflicts', scheduleController.getScheduleConflicts);
@@ -27,9 +28,6 @@ router.put('/:id', authenticate, authorize('admin'), scheduleController.updateSc
 router.delete('/:id', authenticate, authorize('admin'), scheduleController.deleteSchedule);
 
 
-// Add these routes to scheduleRoutes.js
-router.get('/:id/program/:programId', authenticate, scheduleController.getScheduleByProgram);
-router.get('/:id/department/:departmentId', authenticate, scheduleController.getScheduleByDepartment);
 // Additional routes
 router.get('/semester/:semesterId', authenticate, scheduleController.getSchedulesBySemester);
 // Add this route before the '/:id' route to avoid path conflicts
