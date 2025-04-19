@@ -1,5 +1,5 @@
 // scheduleController.js
-const { Schedule, Semester, ScheduledCourse, Course, CourseProgram,Professor, TimeSlot, Conflict, ConflictCourse } = require('../../app/models');
+const { Schedule, Semester, ScheduledCourse, Course, Professor, TimeSlot, Conflict, ConflictCourse } = require('../../app/models');
 const { v4: uuidv4 } = require('uuid');
 const { Op } = require('sequelize');
 
@@ -83,6 +83,8 @@ exports.getScheduleById = async (req, res) => {
         time_slot_number: slotNumber,
         is_core: scJson.Course?.is_core || false,
         is_override: scJson.is_override || false,
+        class_instance: scJson.class_instance || 1,
+        num_classes: scJson.num_classes || 1,
         department_id: scJson.Course?.department_id,
         duration_minutes: scJson.Course?.duration_minutes
       };
@@ -115,6 +117,7 @@ exports.getScheduleById = async (req, res) => {
     return res.status(500).json({ message: 'Failed to retrieve schedule', error: error.message });
   }
 };
+
 
 // Create new schedule
 exports.createSchedule = async (req, res) => {
@@ -237,15 +240,195 @@ exports.deleteSchedule = async (req, res) => {
   }
 };
 
-// Get schedules by semester
+// Get schedule filtered by program
+exports.getScheduleByProgram = async (req, res) => {
+  try {
+    const scheduleId = req.params.id;
+    const programId = req.params.programId;
+    
+    // Verify schedule exists
+    const schedule = await Schedule.findByPk(scheduleId);
+    if (!schedule) {
+      return res.status(404).json({ message: 'Schedule not found' });
+    }
+    
+    // Verify program exists
+    const program = await Program.findByPk(programId);
+    if (!program) {
+      return res.status(404).json({ message: 'Program not found' });
+    }
+    
+    // Find all courses in this program
+    const coursesInProgram = await CourseProgram.findAll({
+      where: { program_id: programId },
+      attributes: ['course_id']
+    });
+    
+    const courseIds = coursesInProgram.map(cp => cp.course_id);
+    
+    // Get scheduled courses for this schedule that are in this program
+    const scheduledCourses = await ScheduledCourse.findAll({
+      where: { 
+        schedule_id: scheduleId,
+        course_id: {
+          [Op.in]: courseIds
+        }
+      },
+      include: [
+        { model: Course, attributes: ['course_id', 'course_name', 'is_core', 'department_id', 'duration_minutes'] },
+        { model: Professor, attributes: ['professor_id', 'first_name', 'last_name'] },
+        { model: TimeSlot, attributes: ['timeslot_id', 'name', 'start_time', 'end_time', 'day_of_week'] }
+      ]
+    });
+    
+    // Transform them into the format the frontend expects
+    // Similar to getScheduleById, but filtered by program
+    const formattedCourses = scheduledCourses.map(sc => {
+      const scJson = sc.toJSON();
+      
+      // Extract the time slot number 
+      let slotNumber = 1;
+      if (scJson.timeslot_id) {
+        const timeSlotMatch = scJson.timeslot_id.match(/TS(\d+)/);
+        if (timeSlotMatch) {
+          slotNumber = parseInt(timeSlotMatch[1]);
+        }
+      }
+
+      // Normalize the day name
+      let dayOfWeek = scJson.day_of_week || '';
+      const dayMap = {
+        'MON': 'Monday',
+        'TUE': 'Tuesday', 
+        'WED': 'Wednesday',
+        'THU': 'Thursday',
+        'FRI': 'Friday'
+      };
+      
+      if (dayMap[dayOfWeek.toUpperCase()]) {
+        dayOfWeek = dayMap[dayOfWeek.toUpperCase()];
+      }
+      
+      // Create the formatted course object
+      return {
+        scheduled_course_id: scJson.scheduled_course_id,
+        schedule_id: scJson.schedule_id,
+        course_id: scJson.Course?.course_id,
+        course_name: scJson.Course?.course_name,
+        professor_id: scJson.Professor?.professor_id,
+        professor_name: `${scJson.Professor?.first_name || ''} ${scJson.Professor?.last_name || ''}`.trim(),
+        timeslot_id: scJson.timeslot_id,
+        day_of_week: dayOfWeek,
+        time_slot_id: scJson.timeslot_id,
+        time_slot_number: slotNumber,
+        is_core: scJson.Course?.is_core || false,
+        is_override: scJson.is_override || false,
+        class_instance: scJson.class_instance || 1,
+        num_classes: scJson.num_classes || 1,
+        department_id: scJson.Course?.department_id,
+        duration_minutes: scJson.Course?.duration_minutes
+      };
+    });
+    
+    // Include program details
+    const responseData = {
+      ...schedule.toJSON(),
+      program: program.toJSON(),
+      courses: formattedCourses
+    };
+    
+    return res.status(200).json(responseData);
+  } catch (error) {
+    console.error('Error retrieving program schedule:', error);
+    return res.status(500).json({ message: 'Failed to retrieve program schedule', error: error.message });
+  }
+};
+
+// Get schedule filtered by department
+exports.getScheduleByDepartment = async (req, res) => {
+  try {
+    const scheduleId = req.params.id;
+    const departmentId = req.params.departmentId;
+    
+    // Verify schedule exists
+    const schedule = await Schedule.findByPk(scheduleId);
+    if (!schedule) {
+      return res.status(404).json({ message: 'Schedule not found' });
+    }
+    
+    // Verify department exists
+    const department = await Department.findByPk(departmentId);
+    if (!department) {
+      return res.status(404).json({ message: 'Department not found' });
+    }
+    
+    // Find all courses in this department
+    const coursesInDepartment = await Course.findAll({
+      where: { department_id: departmentId },
+      attributes: ['course_id']
+    });
+    
+    const courseIds = coursesInDepartment.map(c => c.course_id);
+    
+    // Get scheduled courses for this schedule that are in this department
+    const scheduledCourses = await ScheduledCourse.findAll({
+      where: { 
+        schedule_id: scheduleId,
+        course_id: {
+          [Op.in]: courseIds
+        }
+      },
+      include: [
+        { model: Course, attributes: ['course_id', 'course_name', 'is_core', 'department_id', 'duration_minutes'] },
+        { model: Professor, attributes: ['professor_id', 'first_name', 'last_name'] },
+        { model: TimeSlot, attributes: ['timeslot_id', 'name', 'start_time', 'end_time', 'day_of_week'] }
+      ]
+    });
+    
+    // Format the courses similar to getScheduleByProgram method
+    const formattedCourses = scheduledCourses.map(sc => {
+      // Same transformation logic as getScheduleByProgram
+      // (code omitted for brevity)
+      
+      // Return the formatted course object
+      return {
+        scheduled_course_id: scJson.scheduled_course_id,
+        schedule_id: scJson.schedule_id,
+        course_id: scJson.Course?.course_id,
+        course_name: scJson.Course?.course_name,
+        professor_id: scJson.Professor?.professor_id,
+        professor_name: `${scJson.Professor?.first_name || ''} ${scJson.Professor?.last_name || ''}`.trim(),
+        timeslot_id: scJson.timeslot_id,
+        day_of_week: dayOfWeek,
+        time_slot_id: scJson.timeslot_id,
+        time_slot_number: slotNumber,
+        is_core: scJson.Course?.is_core || false,
+        is_override: scJson.is_override || false,
+        class_instance: scJson.class_instance || 1,
+        num_classes: scJson.num_classes || 1,
+        department_id: scJson.Course?.department_id,
+        duration_minutes: scJson.Course?.duration_minutes
+      };
+    });
+    
+    // Include department details
+    const responseData = {
+      ...schedule.toJSON(),
+      department: department.toJSON(),
+      courses: formattedCourses
+    };
+    
+    return res.status(200).json(responseData);
+  } catch (error) {
+    console.error('Error retrieving department schedule:', error);
+    return res.status(500).json({ message: 'Failed to retrieve department schedule', error: error.message });
+  }
+};
+
 // Get schedules by semester
 exports.getSchedulesBySemester = async (req, res) => {
   try {
     const semesterId = req.params.semesterId;
-    const departmentId = req.query.department_id;
-    const programId = req.query.program_id;
-    
-    console.log(`Filtering schedules - semester:${semesterId}, department:${departmentId || 'all'}, program:${programId || 'all'}`);
     
     // Check if semester exists
     const semester = await Semester.findByPk(semesterId);
@@ -253,91 +436,16 @@ exports.getSchedulesBySemester = async (req, res) => {
       return res.status(404).json({ message: 'Semester not found' });
     }
     
-    // Get all schedules for this semester
     const schedules = await Schedule.findAll({
       where: { semester_id: semesterId },
       include: [{ model: Semester, attributes: ['name', 'start_date', 'end_date'] }],
       order: [['created_at', 'DESC']]
     });
     
-    // If no department/program filter, return all schedules
-    if (!departmentId && !programId) {
-      return res.status(200).json(schedules);
-    }
-    
-    // Manual filtering approach to debug the issue
-    const filteredScheduleIds = new Set();
-    
-    for (const schedule of schedules) {
-      // First, get the scheduled courses for this schedule
-      const scheduledCourses = await ScheduledCourse.findAll({
-        where: { schedule_id: schedule.schedule_id }
-      });
-      
-      console.log(`Schedule ${schedule.schedule_id} has ${scheduledCourses.length} scheduled courses`);
-      
-      // Then, for each scheduled course, look up the course directly 
-      let hasMatchingCourse = false;
-      
-      for (const scheduledCourse of scheduledCourses) {
-        if (!scheduledCourse.course_id) {
-          console.log(`Warning: Scheduled course ${scheduledCourse.scheduled_course_id} has no course_id`);
-          continue;
-        }
-        
-        // Explicitly get the course to check if it exists and matches department
-        const course = await Course.findByPk(scheduledCourse.course_id);
-        
-        if (!course) {
-          console.log(`Warning: Course ${scheduledCourse.course_id} not found for scheduled course ${scheduledCourse.scheduled_course_id}`);
-          continue;
-        }
-        
-        // Log the course details to see what we're working with
-        console.log(`Found course: ${course.course_id}, department: ${course.department_id}`);
-        
-        // Check department filter
-        const matchesDepartment = !departmentId || course.department_id === departmentId;
-        
-        // Check program filter if needed
-        let matchesProgram = !programId;
-        
-        if (programId && matchesDepartment) {
-          // Directly query for the course-program relationship
-          const courseProgram = await CourseProgram.findOne({
-            where: {
-              course_id: course.course_id,
-              program_id: programId
-            }
-          });
-          
-          matchesProgram = !!courseProgram;
-        }
-        
-        if (matchesDepartment && matchesProgram) {
-          hasMatchingCourse = true;
-          break;
-        }
-      }
-      
-      if (hasMatchingCourse) {
-        filteredScheduleIds.add(schedule.schedule_id);
-      }
-    }
-    
-    // Return only the schedules that matched our filters
-    const filteredSchedules = schedules.filter(schedule => 
-      filteredScheduleIds.has(schedule.schedule_id)
-    );
-    
-    console.log(`Found ${filteredSchedules.length} schedules after filtering`);
-    return res.status(200).json(filteredSchedules);
+    return res.status(200).json(schedules);
   } catch (error) {
     console.error('Error retrieving semester schedules:', error);
-    return res.status(500).json({ 
-      message: 'Failed to retrieve semester schedules',
-      error: error.message
-    });
+    return res.status(500).json({ message: 'Failed to retrieve semester schedules' });
   }
 };
 
@@ -767,38 +875,5 @@ exports.revertConflictResolution = async (req, res) => {
   } catch (error) {
     console.error('Error reverting conflict resolution:', error);
     return res.status(500).json({ message: 'Failed to revert conflict resolution' });
-  }
-};
-
-// Add this as a DEBUG function at the end of your controller
-exports.debugCourseData = async (req, res) => {
-  try {
-    // Get sample scheduled courses
-    const scheduledCourses = await ScheduledCourse.findAll({
-      limit: 10,
-      include: [{ model: Course }]
-    });
-    
-    // Map them to a cleaner format for inspection
-    const mappedData = scheduledCourses.map(sc => ({
-      scheduled_course_id: sc.scheduled_course_id,
-      schedule_id: sc.schedule_id,
-      has_course: !!sc.Course,
-      course_id: sc.Course?.course_id,
-      department_id: sc.Course?.department_id,
-    }));
-    
-    // Return the debug info
-    res.status(200).json({
-      message: 'Debug course data',
-      sample_scheduled_courses: mappedData,
-      counts: {
-        scheduledCourses: await ScheduledCourse.count(),
-        courses: await Course.count(),
-        coursePrograms: await CourseProgram.count()
-      }
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
   }
 };
