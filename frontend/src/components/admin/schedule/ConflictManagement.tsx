@@ -330,15 +330,22 @@ const ConflictManagement: React.FC<ConflictManagementProps> = ({
   };
   
   // Updated getFilteredTimeSlots function to work with the actual data structure
-  const getFilteredTimeSlots = (day: string, courseToMove: string) => {
-    if (!selectedConflict || !selectedConflict.scheduled_courses || !day) return [];
-    
-    // Simple filter by day only - no duration filtering
-    return availableTimeSlots.filter(slot => 
-      slot.day_of_week === day
-    );
-  };
+  // Function to calculate duration in minutes from start and end times
+const calculateDuration = (startTime: string, endTime: string): number => {
+  const start = new Date(`1970-01-01T${startTime}`);
+  const end = new Date(`1970-01-01T${endTime}`);
+  return (end.getTime() - start.getTime()) / (1000 * 60); // Convert ms to minutes
+};
+
+// Updated function to filter time slots based on day and calculated duration
+const getFilteredTimeSlots = (day: string, courseToMove: string) => {
+  if (!selectedConflict || !selectedConflict.scheduled_courses || !day) return [];
   
+  // Simple filter by day only - no duration filtering
+  return availableTimeSlots.filter(slot => 
+    slot.day_of_week === day
+  );
+};
 
   // Prepare filtered time slots based on selections
   const filteredTimeSlots = (selectedDay && selectedCourseToMove) 
@@ -423,6 +430,27 @@ const ConflictManagement: React.FC<ConflictManagementProps> = ({
                             const firstCourse = conflict.scheduled_courses[0];
                             timeSlotInfo = firstCourse.timeslot;
                           }
+                          
+// Add this debug code right before the main return statement (before the <Card> element)
+console.log('Debug Info:');
+console.log('Selected course to move:', selectedCourseToMove);
+console.log('Selected day:', selectedDay);
+console.log('Selected time slot:', selectedNewTimeSlot);
+console.log('Available time slots:', availableTimeSlots.length);
+if (selectedDay && selectedCourseToMove) {
+  const filtered = getFilteredTimeSlots(selectedDay, selectedCourseToMove);
+  console.log('Filtered time slots:', filtered.length, filtered.map(s => s.name));
+  
+  // Check if hasNoCompatibleSlots is calculated correctly
+  console.log('Has no compatible slots?', filtered.length === 0);
+}
+
+
+
+
+
+
+
                           
                           if (timeSlotInfo) {
                             return (
@@ -510,7 +538,7 @@ const ConflictManagement: React.FC<ConflictManagementProps> = ({
                             {resolving === conflict.conflict_id && resolutionType === 'REVERT' ? (
                               <CircularProgress size={16} />
                             ) : (
-                              'Revert'
+                              'Undo'
                             )}
                           </Button>
                         ) : (
@@ -695,10 +723,15 @@ const ConflictManagement: React.FC<ConflictManagementProps> = ({
                 </Select>
                 {selectedDay && (
   <FormHelperText>
-    {hasNoCompatibleSlots 
-      ? `No time slots available on ${selectedDay}`
+  {hasNoCompatibleSlots
+    ? `No time slots available on ${selectedDay} with compatible duration`
+    : selectedCourseInfo?.timeslot?.start_time && selectedCourseInfo?.timeslot?.end_time
+      ? `Showing time slots with similar duration (${calculateDuration(
+          selectedCourseInfo.timeslot.start_time,
+          selectedCourseInfo.timeslot.end_time
+        )} minutes)`
       : `Select a time slot for this course`}
-  </FormHelperText>
+</FormHelperText>
 )}
               </FormControl>
             </>
@@ -743,7 +776,7 @@ const ConflictManagement: React.FC<ConflictManagementProps> = ({
               <CircularProgress size={24} /> :
               (resolutionType === 'ACCEPT' ? 'Accept Conflict' :
                resolutionType === 'OVERRIDE' ? 'Override Conflict' :
-               'Revert Resolution')
+               'Undo Resolution')
             }
           </Button>
         </DialogActions>
@@ -764,4 +797,5 @@ const ConflictManagement: React.FC<ConflictManagementProps> = ({
 };
 
 export default ConflictManagement;
+
 

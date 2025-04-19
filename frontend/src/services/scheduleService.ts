@@ -29,6 +29,8 @@ export interface ScheduledCourse {
   override_reason?: string;
   created_at: string;
   updated_at: string;
+  class_instance:number;
+  num_classes:number;
   course?: {
     course_id: string;
     course_name: string;
@@ -44,6 +46,7 @@ export interface ScheduledCourse {
     name: string;
     start_time: string;
     end_time: string;
+    duration_minutes: number;
   };
 }
 
@@ -75,7 +78,7 @@ export interface Conflict {
     start_time: string;
     end_time: string;
     day_of_week: string;
-    duration_minutes?: number;
+    duration_minutes: number;
   };
   time_slot?: {
     timeslot_id: string;
@@ -83,6 +86,7 @@ export interface Conflict {
     start_time: string;
     end_time: string;
     day_of_week: string;
+    duration_minutes: number;
   };
   
   timeslot_info?: any;
@@ -99,6 +103,7 @@ export interface Conflict {
       start_time: string;
       end_time: string;
       day_of_week: string;
+      duration_minutes: number;
     };
   }[];
 }
@@ -476,3 +481,4 @@ const scheduleService = {
 };
 
 export default scheduleService;
+
