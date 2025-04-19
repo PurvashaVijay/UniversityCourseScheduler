@@ -1,12 +1,12 @@
 // src/services/courseService.ts
-// Add program association interface
-export interface ProgramAssociation {
-  program_id: string;
-  name?: string;
-  department_id?: string;
-  is_core: boolean;
-  num_classes: number;
-}
+// program association interface
+  export interface ProgramAssociation {
+    program_id: string;
+    name?: string;
+    department_id?: string;
+    is_core: boolean;
+    num_classes?: number; // Make num_classes optional
+  }
 // Updated Course interface with correct fields and optional properties
 export interface Course {
   course_id: string;
@@ -52,8 +52,6 @@ export const getCoursesByProgram = async (programId: string): Promise<Course[]> 
       throw new Error(`Failed to fetch courses by program: ${response.status} ${response.statusText}`);
     }
     
-    
-
     const data = await response.json();
     console.log(`Raw API response for program ${programId}:`, data);
     
@@ -63,12 +61,7 @@ export const getCoursesByProgram = async (programId: string): Promise<Course[]> 
       return [];
     }
     
-    // Examine the first item to understand structure
-    if (data.length > 0) {
-      console.log('First course structure:', JSON.stringify(data[0], null, 2));
-    }
-    
-    // Normalize the data to ensure consistent structure with semesters properly handled
+    // Normalize the data to ensure consistent structure with numClasses properly mapped
     const normalizedCourses = data.map(course => ({
       course_id: course.course_id,
       program_id: programId,
@@ -77,7 +70,9 @@ export const getCoursesByProgram = async (programId: string): Promise<Course[]> 
       description: course.description || '',
       department_id: course.department_id || '',
       duration_minutes: course.duration_minutes || 0,
-      is_core: Boolean(course.is_core),
+      is_core: Boolean(course.is_core), // Explicitly convert to boolean
+      // Map the num_classes field to numClasses for frontend use
+      numClasses: course.num_classes || 1,
       // Ensure semesters is always an array
       semesters: Array.isArray(course.semesters) ? course.semesters : 
                (course.semesters ? [course.semesters] : []),
@@ -90,8 +85,7 @@ export const getCoursesByProgram = async (programId: string): Promise<Course[]> 
     }));
     
     console.log(`Normalized ${normalizedCourses.length} courses for program ${programId}`);
-    console.log('Sample normalized course with semesters:', 
-      normalizedCourses.length > 0 ? JSON.stringify(normalizedCourses[0], null, 2) : 'No courses');
+    console.log('Sample normalized course:', normalizedCourses.length > 0 ? JSON.stringify(normalizedCourses[0], null, 2) : 'No courses');
     
     return normalizedCourses;
   } catch (error) {
@@ -154,12 +148,64 @@ export const createCourse = async (course: Partial<Course>): Promise<Course> => 
       body: JSON.stringify(backendCourse)
     });
 
+    // Log the response status to help diagnose issues
+    console.log(`Course creation response status: ${response.status}`);
+    
+    // Check if response is ok (status in the 200-299 range)
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Failed to create course');
+      // Log the status code and response text for debugging
+      console.error(`HTTP error ${response.status}: ${response.statusText}`);
+      
+      // Try to get more detailed error info from the response
+      let errorMessage = `Failed to create course: HTTP ${response.status}`;
+      try {
+        const errorData = await response.json();
+        if (errorData.message) {
+          errorMessage = errorData.message;
+        }
+        if (errorData.error) {
+          console.error('Detailed error:', errorData.error);
+        }
+      } catch (parseError) {
+        console.error('Could not parse error response:', parseError);
+      }
+      
+      throw new Error(errorMessage);
     }
 
-    return await response.json();
+    // For successful responses, carefully handle the response body
+    try {
+      // Get the response content type
+      const contentType = response.headers.get('content-type');
+      
+      // Only try to parse JSON if the content type is json
+      if (contentType && contentType.includes('application/json')) {
+        return await response.json();
+      } else {
+        // If not JSON, create a synthetic success response
+        return {
+          course_id: course.course_id,
+          course_name: course.name || course.course_name,
+          department_id: course.department_id,
+          duration_minutes: course.duration_minutes || 0,
+          is_core: course.is_core || false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        } as Course;
+      }
+    } catch (parseError) {
+      console.error('Error parsing successful response:', parseError);
+      // Return a basic course object as fallback
+      return {
+        course_id: course.course_id,
+        course_name: course.name || course.course_name,
+        department_id: course.department_id,
+        duration_minutes: course.duration_minutes || 0,
+        is_core: course.is_core || false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      } as Course;
+    }
   } catch (error) {
     console.error('Error creating course:', error);
     throw error;
@@ -173,16 +219,23 @@ export const updateCourse = async (id: string, course: Partial<Course>): Promise
     
     console.log(`Updating course ${id} with data:`, course);
     
-    // Map the frontend course model to match what the backend expects
+    // Ensure program associations are properly formatted
     const backendCourse = {
-      course_name: course.name || course.course_name, // Handle both name fields
+      course_name: course.name || course.course_name, 
       department_id: course.department_id,
       duration_minutes: course.duration_minutes,
-      is_core: course.is_core,
-      program_id: course.program_id, // Send single program_id
-      program_associations: course.program_associations, // Add this for multiple programs
-      semesters: course.semesters // Include semesters array
+      is_core: Boolean(course.is_core),
+      program_id: course.program_id, // For backward compatibility
+      // Make sure ALL program associations are included
+      program_associations: course.program_associations?.map(pa => ({
+        program_id: pa.program_id,
+        is_core: Boolean(pa.is_core),
+        num_classes: pa.num_classes || 1
+      })),
+      semesters: course.semesters 
     };
+    
+    console.log('Sending data to backend:', backendCourse);
     
     const response = await fetch(`${API_URL}/courses/${id}`, {
       method: 'PUT',
@@ -329,6 +382,7 @@ export const getCourseById = async (id: string): Promise<Course | null> => {
 
     const data = await response.json();
     console.log(`Received course data for ID ${id}:`, data);
+    console.log('numClasses or num_classes value:', data.numClasses || data.num_classes);
     
     // Transform the data to ensure consistency
     return {
@@ -338,9 +392,10 @@ export const getCourseById = async (id: string): Promise<Course | null> => {
       department_id: data.department_id || '',
       duration_minutes: data.duration_minutes || 0,
       is_core: Boolean(data.is_core),
-      // Extract program_id from programs array if available
-      program_id: data.program_id || (data.programs && data.programs.length > 0 ? data.programs[0].program_id : ''),
+      // Extract numClasses from the response
+      numClasses: data.numClasses || (data.num_classes || 1),
       // Include other fields as needed
+      program_id: data.program_id || (data.programs && data.programs.length > 0 ? data.programs[0].program_id : ''),
       programs: data.programs || [],
       // Ensure semesters are always an array
       semesters: Array.isArray(data.semesters) ? data.semesters : 

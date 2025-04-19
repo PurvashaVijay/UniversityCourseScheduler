@@ -10,6 +10,7 @@ export interface Course {
     description?: string;
     semesters?: string[];
     semester?: string;
+    numClasses?: number;
   }
   
   export interface ProgramWithCourses {

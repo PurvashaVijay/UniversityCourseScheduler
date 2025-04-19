@@ -54,10 +54,11 @@ app.use('/api/test', testRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({
-    message: 'Something went wrong!',
-    error: process.env.NODE_ENV === 'development' ? err.message : {}
+  console.error('Unhandled error in request:', err);
+  console.error('Stack trace:', err.stack);
+  res.status(500).json({ 
+    message: 'An unexpected error occurred', 
+    error: process.env.NODE_ENV === 'development' ? err.message : undefined 
   });
 });
 
