@@ -27,7 +27,7 @@ import { visuallyHidden } from '@mui/utils';
 
 function getRowId(row: any): string {
   // Prioritize course_id first
-  return row.course_id || row.program_id || row.professor_id || row.department_id || row.id;
+  return row.course_id || row.id || row.program_id || row.professor_id || row.department_id;
 }
 
 interface Column {

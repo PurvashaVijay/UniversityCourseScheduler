@@ -42,7 +42,7 @@ const CourseList: React.FC = () => {
   const [loadingDepartments, setLoadingDepartments] = useState(false);
   const [loadingPrograms, setLoadingPrograms] = useState(false);
   const [loadingCourses, setLoadingCourses] = useState(false);
-  const [deletingCourses, setDeletingCourses] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false); // Renamed from deletingCourses to actually use it
   const [searchTerm, setSearchTerm] = useState('');
   const [showCoreOnly, setShowCoreOnly] = useState(false);
   const [selectedSemesters, setSelectedSemesters] = useState<string[]>(['Fall', 'Spring']);
@@ -61,23 +61,34 @@ const CourseList: React.FC = () => {
       align: 'right' as const,
       format: (value: number | undefined) => value?.toString() || '0'
     },
+    {
+      id: 'numClasses',
+      label: 'Classes',
+      minWidth: 80,
+      align: 'right' as const,
+      format: (value: number | undefined) => {
+      console.log('Formatting numClasses value:', value);
+      return value?.toString() || '1';
+    }
+    },
     { 
       id: 'is_core', 
-      label: 'Core Course', 
-      minWidth: 120,
-      format: (value: boolean | undefined) => value ? 'Core' : 'Elective'
+    label: 'Core Course', 
+    minWidth: 120,
+    format: (value: boolean | undefined) => {
+      return value === true ? 'Core' : 'Elective';
+      }
     },
     {
       id: 'semesters',
-      label: 'Semesters',
-      minWidth: 120,
-      format: (value: string[] | string | undefined | null) => {
-        if (!value) return '';
-        return Array.isArray(value) ? value.join(', ') : String(value);
+    label: 'Semesters',
+    minWidth: 120,
+    format: (value: string[] | string | undefined | null) => {
+      if (!value) return '';
+      return Array.isArray(value) ? value.join(', ') : String(value);
       }
     },
-  ];  
-
+  ];
   // Load departments on component mount
   useEffect(() => {
     const loadDepartments = async () => {
@@ -145,44 +156,43 @@ const CourseList: React.FC = () => {
   const loadCourses = async (programId: string) => {
     try {
       setLoadingCourses(true);
-      console.log('Loading courses for program:', programId);
       
-      const token = localStorage.getItem('token');
-      // Direct fetch to bypass service layer temporarily
-      const response = await fetch(`http://localhost:3000/api/courses/program/${programId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch courses: ${response.status}`);
-      }
-
-      const rawData = await response.json();
-      console.log('Raw API response:', rawData);
+      console.log(`Loading courses for program: ${programId}`);
       
-      // Simple transformation to ensure consistent data structure
-      const processedCourses = rawData.map((course: any) => ({
+      const coursesData = await courseService.getCoursesByProgram(programId);
+      
+      // Ensure we have an array
+      const coursesArray = Array.isArray(coursesData) ? coursesData : [];
+      
+      // Log the courses data for debugging
+      console.log('Courses data received:', coursesArray);
+      
+      // Normalize the data format
+      const normalizedCourses = coursesArray.map(course => ({
+        ...course, // Spread all properties from the original course
         course_id: course.course_id,
         program_id: programId,
-        course_name: course.course_name || '',
-        name: course.course_name || '',
+        course_name: course.course_name || course.name || '',
+        name: course.course_name || course.name || '',
+        description: course.description || '',
         department_id: course.department_id || '',
         duration_minutes: course.duration_minutes || 0,
         is_core: Boolean(course.is_core),
-        // Handle semesters with fallbacks
-        semesters: Array.isArray(course.semesters) ? course.semesters : []
+        // Use type assertion to avoid TypeScript error
+        numClasses: (course as any).num_classes || course.numClasses || 1,
+        semesters: Array.isArray(course.semesters) ? course.semesters : 
+                 (course.semesters ? [course.semesters] : []),
+        created_at: course.created_at || new Date().toISOString(),
+        updated_at: course.updated_at || new Date().toISOString()
       }));
       
-      console.log('Processed courses:', processedCourses);
-      setCourses(processedCourses);
+      console.log('Normalized courses:', normalizedCourses);
+      setCourses(normalizedCourses);
     } catch (error) {
       console.error('Error loading courses:', error);
       setSnackbar({
         open: true,
-        message: 'Failed to load courses',
+        message: 'Failed to load courses. Check the console for details.',
         severity: 'error'
       });
       setCourses([]);
@@ -190,7 +200,6 @@ const CourseList: React.FC = () => {
       setLoadingCourses(false);
     }
   };
-
   const handleDepartmentChange = (event: SelectChangeEvent) => {
     setSelectedDepartment(event.target.value);
   };
@@ -224,7 +233,7 @@ const CourseList: React.FC = () => {
 
   const handleDeleteConfirm = async () => {
     try {
-      setDeletingCourses(true);
+      setIsDeleting(true); // Use the isDeleting state
       console.log(`CourseList: Deleting courses: ${coursesToDelete.join(', ')}`);
       
       // Call the courseService.deleteCourses method
@@ -258,7 +267,7 @@ const CourseList: React.FC = () => {
     } finally {
       setDeleteDialogOpen(false);
       setCoursesToDelete([]);
-      setDeletingCourses(false);
+      setIsDeleting(false); // Reset isDeleting state
     }
   };
 
@@ -471,7 +480,10 @@ const CourseList: React.FC = () => {
           ) : (
             <DataTable
               columns={columns}
-              data={filteredCourses}
+              data={filteredCourses.map(c => {
+                console.log(`Course ${c.course_id} in DataTable has is_core=${c.is_core}`);
+                return c;
+              })}
               title={`Courses - ${programs.find(p => p.program_id === selectedProgram)?.name || ''}`}
               onEdit={handleEditCourse}
               onDelete={handleDeleteClick}

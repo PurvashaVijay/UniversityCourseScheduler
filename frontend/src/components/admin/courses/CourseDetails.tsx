@@ -24,7 +24,11 @@ const CourseDetails: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   
-  const [course, setCourse] = useState<Partial<Course> & { program?: any }>({});
+  const [course, setCourse] = useState<Partial<Course> & { 
+    program?: any, 
+    numClasses?: number 
+  }>({});
+  
   const [loading, setLoading] = useState(true);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
@@ -40,7 +44,9 @@ const CourseDetails: React.FC = () => {
             // Ensure consistent naming
             name: data.name || data.course_name,
             // Ensure semesters is always an array
-            semesters: Array.isArray(data.semesters) ? data.semesters : (data.semesters ? [data.semesters] : [])
+            semesters: Array.isArray(data.semesters) ? data.semesters : (data.semesters ? [data.semesters] : []),
+            // Ensure numClasses is set
+            numClasses: data.numClasses || 1
           });
         } else {
           setSnackbar({
@@ -169,7 +175,7 @@ const CourseDetails: React.FC = () => {
 
       <Paper sx={{ p: 3, mb: 3 }}>
         <Grid container spacing={2}>
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} md={3}>
             <Typography variant="subtitle2" color="text.secondary">
               Course ID
             </Typography>
@@ -177,7 +183,7 @@ const CourseDetails: React.FC = () => {
               {course.course_id}
             </Typography>
           </Grid>
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} md={3}>
             <Typography variant="subtitle2" color="text.secondary">
               Program
             </Typography>
@@ -188,7 +194,7 @@ const CourseDetails: React.FC = () => {
               {course.program_id}
             </Typography>
           </Grid>
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} md={3}>
             <Typography variant="subtitle2" color="text.secondary">
               Duration
             </Typography>
@@ -196,7 +202,15 @@ const CourseDetails: React.FC = () => {
               {course.duration_minutes} minutes
             </Typography>
           </Grid> 
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} md={3}>
+            <Typography variant="subtitle2" color="text.secondary">
+              Number of Classes
+            </Typography>
+            <Typography variant="h6">
+              {course.numClasses || 1}
+            </Typography>
+          </Grid>
+          <Grid item xs={12} md={3}>
             <Typography variant="subtitle2" color="text.secondary">
               Semester
             </Typography>
@@ -277,12 +291,6 @@ const CourseDetails: React.FC = () => {
                           sx={{ mr: 1, mb: 1 }} 
                         />
                       )}
-                      <Chip 
-                        label={`${program.num_classes === 1 ? 'Single' : program.num_classes === 2 ? 'Dual' : 'Triple'} Class`} 
-                        color="default" 
-                        size="small"
-                        sx={{ mb: 1 }} 
-                      />
                     </Box>
                   </Box>
                   <Button

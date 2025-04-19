@@ -4,7 +4,6 @@ const { Op } = require('sequelize');
 
 const { Course, Department, Program, CourseProgram, CoursePrerequisite, CourseSemester, ProfessorCourse, Professor } = require('../../app/models');
 const { sequelize } = require('../../src/config/database');
-
 const { v4: uuidv4 } = require('uuid');
 
 // Get all courses
@@ -62,7 +61,7 @@ exports.getCourseById = async (req, res) => {
       return res.status(404).json({ message: 'Course not found' });
     }
 
-    // Get programs for this course by direct query to CourseProgram
+    // Get CourseProgram records for this course to get num_classes
     const coursePrograms = await CourseProgram.findAll({
       where: { course_id: id }
     });
@@ -87,6 +86,10 @@ exports.getCourseById = async (req, res) => {
       programMap[program.program_id] = program;
     });
 
+    // Get num_classes from the first CourseProgram record (for primary program)
+    const numClasses = coursePrograms.length > 0 ? 
+      (coursePrograms[0].num_classes || 1) : 1;
+
     // Merge program data with course program data
     const programsWithDetails = coursePrograms.map(cp => {
       const program = programMap[cp.program_id] || {};
@@ -104,10 +107,6 @@ exports.getCourseById = async (req, res) => {
       where: { course_id: id }
     });
 
-    // Get the primary program's number of classes (from the first association)
-    const primaryNumClasses = coursePrograms.length > 0 ? 
-      (coursePrograms[0].num_classes || 1) : 1;
-
     // Format the response with all the data needed by the frontend
     const result = {
       course_id: course.course_id,
@@ -116,7 +115,7 @@ exports.getCourseById = async (req, res) => {
       duration_minutes: course.duration_minutes,
       is_core: course.is_core,
       program_id: coursePrograms.length > 0 ? coursePrograms[0].program_id : null,
-      numClasses: primaryNumClasses,
+      numClasses: numClasses, // Make sure to include numClasses in the response
       programs: programsWithDetails,
       prerequisites: course.prerequisites,
       department: course.Department,
@@ -124,11 +123,7 @@ exports.getCourseById = async (req, res) => {
       semesters: courseSemesters.map(cs => cs.semester)
     };
 
-    console.log('Course programs data:', programsWithDetails.map(p => ({
-      program_id: p.program_id,
-      is_required: p.is_core, 
-      is_core: p.is_core
-    })));
+    console.log('Course response:', result);
 
     return res.status(200).json(result);
   } catch (error) {
@@ -226,6 +221,9 @@ exports.getCourseProfessorAssignments = async (req, res) => {
 
 // Create new course - Updated to respect user-provided ID
 exports.createCourse = async (req, res) => {
+  // Use a transaction to ensure data consistency
+  const t = await sequelize.transaction();
+  
   try {
     console.log('Create course request body:', req.body);
     
@@ -237,8 +235,9 @@ exports.createCourse = async (req, res) => {
       duration_minutes, 
       is_core, 
       program_id,
-      program_associations, // New field with array of program associations
-      semesters
+      program_associations, // Array of program associations
+      semesters,
+      numClasses  // Get the global numClasses value
     } = req.body;
     
     // Use name as course_name if course_name is not provided
@@ -255,14 +254,15 @@ exports.createCourse = async (req, res) => {
       return res.status(400).json({ message: 'Department ID is required' });
     }
     
-    // Use user-provided course_id if present, otherwise generate a new one
+    // Generate ID if not provided
     if (!course_id) {
       course_id = `COURSE-${uuidv4().substring(0, 8)}`;
     }
     
     // Check if the course ID already exists
-    const existingCourse = await Course.findByPk(course_id);
+    const existingCourse = await Course.findByPk(course_id, { transaction: t });
     if (existingCourse) {
+      await t.rollback();
       return res.status(409).json({ message: 'Course with this ID already exists' });
     }
     
@@ -272,57 +272,81 @@ exports.createCourse = async (req, res) => {
       department_id,
       course_name,
       duration_minutes: duration_minutes || 55,
-      is_core: is_core || false
-    });
-    /*
-    // Associate with program if provided
-    if (program_id) {
-      await CourseProgram.create({
-        course_program_id: `CP-${uuidv4().substring(0, 8)}`,
-        course_id: newCourse.course_id,
-        program_id,
-        is_required: is_core || false
-      });
-    }
-    */
+      is_core: Boolean(is_core) // Proper boolean conversion
+    }, { transaction: t });
+    
+    console.log('Course created successfully:', newCourse.course_id);
+    
     // Handle program associations
     if (program_associations && Array.isArray(program_associations) && program_associations.length > 0) {
       console.log('Creating program associations:', program_associations);
-  
-      // Create each program association
-      for (const association of program_associations) {
-        console.log('Creating CourseProgram with is_required:', association.is_core === true);
-        await CourseProgram.create({
-          course_program_id: `CP-${uuidv4().substring(0, 8)}`,
-          course_id: newCourse.course_id,
-          program_id: association.program_id,
-          is_required: association.is_core === true,
-          num_classes: association.num_classes || 1
-        });
+      
+      try {
+        // Create each program association
+        for (const association of program_associations) {
+          console.log('Creating CourseProgram with is_required:', association.is_core === true);
+          await CourseProgram.create({
+            course_program_id: `CP-${uuidv4().substring(0, 8)}`,
+            course_id: newCourse.course_id,
+            program_id: association.program_id,
+            is_required: association.is_core === true,
+            num_classes: numClasses || association.num_classes || 1  // Use global numClasses, then fall back
+          }, { transaction: t });
+        }
+      } catch (associationError) {
+        console.error('Error creating program associations:', associationError);
+        throw associationError; // Re-throw to trigger transaction rollback
       }
     } else if (program_id) {
       // Backward compatibility with old format
-      await CourseProgram.create({
-        course_program_id: `CP-${uuidv4().substring(0, 8)}`,
-        course_id: newCourse.course_id,
-        program_id,
-        is_required: is_core || false,
-        num_classes: 1 // Default to single class
-      });
+      try {
+        await CourseProgram.create({
+          course_program_id: `CP-${uuidv4().substring(0, 8)}`,
+          course_id: newCourse.course_id,
+          program_id,
+          is_required: is_core === true,
+          num_classes: numClasses || 1 // Use global numClasses, default to 1
+        }, { transaction: t });
+      } catch (associationError) {
+        console.error('Error creating program association:', associationError);
+        throw associationError; // Re-throw to trigger transaction rollback
+      }
+    } else if (program_id) {
+      // Backward compatibility with old format
+      try {
+        await CourseProgram.create({
+          course_program_id: `CP-${uuidv4().substring(0, 8)}`,
+          course_id: newCourse.course_id,
+          program_id,
+          is_required: is_core === true,
+          num_classes: 1 // Default to single class
+        }, { transaction: t });
+      } catch (associationError) {
+        console.error('Error creating program association:', associationError);
+        throw associationError; // Re-throw to trigger transaction rollback
+      }
     }
 
     // Handle semesters if provided
     if (semesters && Array.isArray(semesters)) {
       console.log('Creating semester associations:', semesters);
-      for (const semester of semesters) {
-        await CourseSemester.create({
-          course_id: newCourse.course_id,
-          semester
-        });
+      try {
+        for (const semester of semesters) {
+          await CourseSemester.create({
+            course_id: newCourse.course_id,
+            semester
+          }, { transaction: t });
+        }
+      } catch (semesterError) {
+        console.error('Error creating semester associations:', semesterError);
+        throw semesterError; // Re-throw to trigger transaction rollback
       }
     }
     
-    // Get the created course with associations
+    // Commit the transaction
+    await t.commit();
+    
+    // Get the created course with associations for the response
     const course = await Course.findByPk(newCourse.course_id, {
       include: [
         {
@@ -340,6 +364,11 @@ exports.createCourse = async (req, res) => {
     
     return res.status(201).json(course);
   } catch (error) {
+    // Rollback the transaction if not already committed
+    if (t && !t.finished) {
+      await t.rollback();
+    }
+    
     console.error('Error creating course:', error);
     return res.status(500).json({
       message: 'Failed to create course',
@@ -350,27 +379,34 @@ exports.createCourse = async (req, res) => {
 
 // Update course - Enhanced for better handling
 exports.updateCourse = async (req, res) => {
+  // Use a transaction to ensure data consistency
+  const t = await sequelize.transaction();
+  
   try {
     const { id } = req.params;
     console.log(`Updating course with ID: ${id}`);
-    console.log('Update data:', req.body);
+    console.log('Update data:', JSON.stringify(req.body, null, 2));
     
     // Find the course
-    const course = await Course.findByPk(id);
+    const course = await Course.findByPk(id, { transaction: t });
     
     if (!course) {
+      await t.rollback();
       return res.status(404).json({ message: 'Course not found' });
     }
+    
+    // Add additional debugging for program associations
+    console.log('Received program associations:', req.body.program_associations);
     
     // Update basic course fields
     const { 
       department_id, 
       course_name, 
-      name, // Accept both course_name and name
+      name, 
       duration_minutes, 
       is_core, 
-      program_id, // For backward compatibility
-      program_associations, // New field with array of program associations
+      program_associations,
+      numClasses, // Get the global numClasses value 
       semesters 
     } = req.body;
     
@@ -381,94 +417,92 @@ exports.updateCourse = async (req, res) => {
     if (finalCourseName) course.course_name = finalCourseName;
     if (department_id) course.department_id = department_id;
     if (duration_minutes !== undefined) course.duration_minutes = duration_minutes;
-    if (is_core !== undefined) course.is_core = is_core;
+    if (is_core !== undefined) course.is_core = Boolean(is_core);
     
     // Save the updated course
-    await course.save();
-    /*
-    // Update program association if program_id is provided
-    if (program_id) {
-      // First, check if the course-program association already exists
-      const existingAssociation = await CourseProgram.findOne({
-        where: { 
-          course_id: id,
-          program_id: program_id
-        }
-      });
-      
-      if (!existingAssociation) {
-        // Create a new association
-        await CourseProgram.create({
-          course_program_id: `CP-${uuidv4().substring(0, 8)}`,
-          course_id: id,
-          program_id: program_id,
-          is_required: is_core || false
-        });
-      }
-    }
-    */
-    // Handle program associations
+    await course.save({ transaction: t });
+    
+    // Handle program associations - this is the critical part
     if (program_associations && Array.isArray(program_associations)) {
-      console.log('Updating program associations:', program_associations);
-  
-      // First, remove all existing program associations
-      await CourseProgram.destroy({ where: { course_id: id } });
-  
-      // Then create new ones
-      for (const association of program_associations) {
-        await CourseProgram.create({
-          course_program_id: `CP-${uuidv4().substring(0, 8)}`,
-          course_id: id,
-          program_id: association.program_id,
-          is_required: association.is_core === true,
-          num_classes: association.num_classes || 1
+      console.log('Processing program associations:', program_associations);
+      
+      try {
+        // First, remove all existing program associations for this course
+        const deletedCount = await CourseProgram.destroy({ 
+          where: { course_id: id },
+          transaction: t 
         });
-      }
-    } else if (program_id) {
-      // Backward compatibility with old format
-      // First, check if the course-program association already exists
-      const existingAssociation = await CourseProgram.findOne({
-        where: { 
-          course_id: id,
-          program_id: program_id
+        console.log(`Deleted ${deletedCount} existing program associations`);
+        
+        // Check if any associations remain after deletion
+        const remainingCount = await CourseProgram.count({ 
+          where: { course_id: id },
+          transaction: t
+        });
+        console.log(`After deletion, remaining associations: ${remainingCount}`);
+        
+        // Then create new ones for ALL program associations received
+        for (const association of program_associations) {
+          console.log('Creating program association:', association);
+          
+          // Generate a unique ID for the association
+          const courseProgId = `CP-${uuidv4().substring(0, 8)}`;
+          
+          // Explicitly create a new association record for each program
+          const newAssociation = await CourseProgram.create({
+            course_program_id: courseProgId,
+            course_id: id,
+            program_id: association.program_id,
+            is_required: association.is_core === true, // Ensure boolean conversion
+            num_classes: numClasses || association.num_classes || 1 // Use global numClasses value
+          }, { transaction: t });
+          
+          console.log(`Created association with ID: ${courseProgId}`);
         }
-      });
-  
-      if (!existingAssociation) {
-        // Create a new association
-        await CourseProgram.create({
-          course_program_id: `CP-${uuidv4().substring(0, 8)}`,
-          course_id: id,
-          program_id: program_id,
-          is_required: is_core || false,
-          num_classes: 1 // Default to single class
+        
+        // Check created associations count
+        const newCount = await CourseProgram.count({ 
+          where: { course_id: id },
+          transaction: t
         });
+        console.log(`After creation, new association count: ${newCount}`);
+      } catch (associationError) {
+        console.error('Error updating program associations:', associationError);
+        throw associationError; // Re-throw to trigger rollback
       }
     }
 
     // Update semester associations if provided
     if (semesters && Array.isArray(semesters)) {
-      console.log('Updating semesters for course:', semesters);
-      
-      // First, remove all existing semester associations
-      await CourseSemester.destroy({ where: { course_id: id } });
-      
-      // Then create new ones
-      for (const semester of semesters) {
-        await CourseSemester.create({
-          course_id: id,
-          semester
+      try {
+        // First, remove all existing semester associations
+        await CourseSemester.destroy({ 
+          where: { course_id: id },
+          transaction: t 
         });
+        
+        // Then create new ones
+        for (const semester of semesters) {
+          await CourseSemester.create({
+            course_id: id,
+            semester
+          }, { transaction: t });
+        }
+      } catch (semesterError) {
+        console.error('Error updating semester associations:', semesterError);
+        throw semesterError; // Re-throw to trigger rollback
       }
     }
     
-    // Get the updated course with associations for the response
+    // Commit the transaction
+    await t.commit();
+    
+    // Fetch the updated course with associations to return
     const updatedCourse = await Course.findByPk(id, {
       include: [
         { model: Department },
         { 
           model: Program, 
-          as: 'programs',
           through: { attributes: [] }
         }
       ]
@@ -479,6 +513,11 @@ exports.updateCourse = async (req, res) => {
       course: updatedCourse
     });
   } catch (error) {
+    // Rollback if transaction is still active
+    if (t && !t.finished) {
+      await t.rollback();
+    }
+    
     console.error('Error updating course:', error);
     return res.status(500).json({
       message: 'Failed to update course',
@@ -604,9 +643,18 @@ exports.getCoursesByProgram = async (req, res) => {
       where: { program_id: programId }
     });
     
-    // Extract course IDs
-    const courseIds = coursePrograms.map(cp => cp.course_id);
-    console.log(`Found ${courseIds.length} course IDs:`, courseIds.join(', '));
+    // Extract course IDs and create Maps to store both is_required and num_classes values
+    const courseIds = [];
+    const courseRequiredMap = new Map(); // This map was missing or undefined
+    const courseNumClassesMap = new Map();
+    
+    coursePrograms.forEach(cp => {
+      courseIds.push(cp.course_id);
+      courseRequiredMap.set(cp.course_id, cp.is_required === true);
+      courseNumClassesMap.set(cp.course_id, cp.num_classes || 1);
+    });
+    
+    console.log(`Found ${courseIds.length} course IDs for program ${programId}`);
     
     if (courseIds.length === 0) {
       return res.status(200).json([]);
@@ -619,9 +667,10 @@ exports.getCoursesByProgram = async (req, res) => {
       },
       include: [{ model: Department }]
     });
+    
     console.log(`Retrieved ${courses.length} course details`);
     
-    // Get semester data for each course
+    // Get semester data for each course and add other data from maps
     const results = await Promise.all(courses.map(async (course) => {
       const courseJson = course.toJSON();
       
@@ -632,6 +681,12 @@ exports.getCoursesByProgram = async (req, res) => {
       
       // Add semesters to course data
       courseJson.semesters = semesters.map(sem => sem.semester);
+      
+      // Add is_required (is_core) status specifically for this program
+      courseJson.is_core = courseRequiredMap.get(course.course_id) === true;
+      
+      // Add num_classes from the map
+      courseJson.num_classes = courseNumClassesMap.get(course.course_id) || 1;
       
       return courseJson;
     }));

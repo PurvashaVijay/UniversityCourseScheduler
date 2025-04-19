@@ -42,9 +42,7 @@ interface ProgramAssociation {
   name: string;
   department_id: string;
   is_core: boolean;
-  num_classes: number;
 }
-
 
 const CourseForm: React.FC = () => {
   const navigate = useNavigate();
@@ -68,7 +66,7 @@ const CourseForm: React.FC = () => {
     description: string;
     duration_minutes: number | '';
     is_core: boolean;
-    numClasses: number; // Added numClasses field
+    numClasses: number;
     semesters: string[];
   }>({
     course_id: '',
@@ -77,8 +75,8 @@ const CourseForm: React.FC = () => {
     name: '',
     description: '',
     duration_minutes: 55,
-    is_core: false, // Kept for backward compatibility
-    numClasses: 1, // Default to 1
+    is_core: false,
+    numClasses: 1,
     semesters: []
   });
   
@@ -133,6 +131,10 @@ const CourseForm: React.FC = () => {
             // Set semester checkboxes
             setSelectedSemesters(loadedSemesters);
             
+            // Get the numClasses value - log it for debugging
+            const numClassesValue = data.numClasses || 1;
+            console.log('numClasses loaded:', numClassesValue);
+            
             // Ensure all required fields are set
             setCourse({
               course_id: data.course_id || '',
@@ -142,8 +144,8 @@ const CourseForm: React.FC = () => {
               description: data.description || '',
               duration_minutes: typeof data.duration_minutes === 'number' ? data.duration_minutes : 55,
               is_core: Boolean(data.is_core),
-              numClasses: data.numClasses || 1, // Default to 1 if not provided
-              semesters: loadedSemesters  // Set the semesters here too
+              numClasses: numClassesValue,
+              semesters: loadedSemesters
             });
 
             // Add this section to handle program associations:
@@ -153,8 +155,7 @@ const CourseForm: React.FC = () => {
                 program_id: prog.program_id,
                 name: prog.name || '',
                 department_id: prog.department_id || '',
-                is_core: Boolean(prog.is_core), // Ensure this is correctly cast to boolean
-                num_classes: prog.num_classes || 1
+                is_core: prog.is_core === true, // Explicitly convert to boolean
               }));
               
               console.log('Processed program associations:', associations);
@@ -205,13 +206,12 @@ const CourseForm: React.FC = () => {
             program_id: course.program_id,
             name: selectedProgram.name || '',
             department_id: selectedProgram.department_id || '',
-            is_core: course.is_core,
-            num_classes: course.numClasses || 1
+            is_core: course.is_core
           }
         ]);
       }
     }
-  }, [course.program_id, course.is_core, course.numClasses, isEditing, programs, programAssociations]);
+  }, [course.program_id, course.is_core, isEditing, programs, programAssociations]);
 
   // Update course.semesters when selectedSemesters changes
   useEffect(() => {
@@ -275,63 +275,63 @@ const CourseForm: React.FC = () => {
     try {
       setSaving(true);
       
-      // Log what we're about to send for debugging
       console.log('About to submit course data:', course);
     
-      // Create a properly typed object for the API
+      // Create a properly structured courseData object with explicit mapping of program associations
       const courseData = {
         ...course,
         semesters: selectedSemesters,
         course_name: course.name, // Ensure course_name is set for backend compatibility
         duration_minutes: Number(course.duration_minutes), // Force conversion to number
-        // For backward compatibility, keep is_core but don't use it for program associations
-        program_associations: [ 
-          // Include the primary program association with its specific settings
-          ...(course.program_id && !programAssociations.some(p => p.program_id === course.program_id) 
-            ? [{
-                program_id: course.program_id,
-                name: programs.find(p => p.program_id === course.program_id)?.name || '',
-                department_id: course.department_id,
-                is_core: false, // Default to false - will be set by program associations
-                num_classes: course.numClasses || 1
-              }] 
-            : []),
-          ...programAssociations
-        ],
-        // Add the numClasses field for backward compatibility
-        numClasses: course.numClasses
+        // Include ALL program associations with explicit boolean conversion
+        program_associations: programAssociations.map(pa => ({
+          program_id: pa.program_id,
+          is_core: pa.is_core === true, // Ensure proper boolean conversion
+          num_classes: course.numClasses // Use the global numClasses value
+        }))
       };
-
-      console.log('Submitting course data:', courseData);
-    
-      if (isEditing) {
-        await courseService.updateCourse(id!, courseData);
-      } else {
-        await courseService.createCourse(courseData);
-      }
-    
-      setSnackbar({
-        open: true,
-        message: `Course ${isEditing ? 'updated' : 'created'} successfully`,
-        severity: 'success'
-      });
-    
-      // Navigate back after a brief delay
-      setTimeout(() => {
-        navigate('/admin/courses');
-      }, 1500);
-    } catch (error) {
-        console.error('Error saving course:', error);
-        let errorMessage = `Failed to ${isEditing ? 'update' : 'create'} course`;
-        if (error instanceof Error) {
-          errorMessage += `: ${error.message}`;
+  
+      console.log('Submitting course data with associations:', courseData);
+      console.log('Program associations:', programAssociations);
+      
+      // Use a try/catch specifically for the API call
+      try {
+        let result;
+        if (isEditing) {
+          result = await courseService.updateCourse(id!, courseData);
+        } else {
+          result = await courseService.createCourse(courseData);
         }
+        
+        console.log('API call succeeded with result:', result);
+        
         setSnackbar({
           open: true,
-          message: errorMessage,
+          message: `Course ${isEditing ? 'updated' : 'created'} successfully`,
+          severity: 'success'
+        });
+        
+        // Navigate back after a brief delay
+        setTimeout(() => {
+          navigate('/admin/courses');
+        }, 1500);
+      } catch (apiError: any) {
+        console.error('API call failed:', apiError);
+        
+        setSnackbar({
+          open: true,
+          message: apiError.message || `Failed to ${isEditing ? 'update' : 'create'} course`,
           severity: 'error'
         });
-      } finally {
+      }
+    } catch (error: any) {
+      console.error('Error in form submission:', error);
+      setSnackbar({
+        open: true,
+        message: error.message || `Unexpected error when ${isEditing ? 'updating' : 'creating'} course`,
+        severity: 'error'
+      });
+    } finally {
       setSaving(false);
     }
   };
@@ -379,8 +379,7 @@ const CourseForm: React.FC = () => {
           program_id: newProgramId,
           name: selectedProgram.name || '',
           department_id: departmentId || '',
-          is_core: course.is_core,
-          num_classes: course.numClasses || 1
+          is_core: course.is_core
         }
       ]);
     }
@@ -409,14 +408,26 @@ const CourseForm: React.FC = () => {
     });
   };
 
-  const handleProgramAssociationChange = (programId: string, field: 'is_core' | 'num_classes', value: boolean | number) => {
+  const handleProgramAssociationChange = (programId: string, field: 'is_core', value: boolean) => {
+    // Log for debugging
+    console.log(`Changing ${field} for program ${programId} to:`, value);
+    
+    // Create a new copy of the associations array rather than modifying in place
     setProgramAssociations(prev => 
       prev.map(p => 
         p.program_id === programId 
-          ? { ...p, [field]: value }
+        ? { ...p, [field]: Boolean(value) }
           : p
       )
     );
+    
+    // Only update the course-level is_core flag for the primary program
+    if (programId === course.program_id && field === 'is_core') {
+      setCourse(prev => ({
+        ...prev,
+        is_core: value as boolean
+      }));
+    }
   };
 
   if (loading) {
@@ -507,33 +518,36 @@ const CourseForm: React.FC = () => {
             </Grid>
             
             <Grid item xs={12} md={6}>
-              <NumberInput
-                id="duration_minutes"
-                label="Duration (minutes)"
-                value={course.duration_minutes}
-                onChange={handleDurationChange}
-                error={errors.duration_minutes}
-                required
-                min={1}
-                max={300}
-              />
+              <FormControl fullWidth margin="normal" sx={{ mt: 0 }}>
+                <TextField
+                  id="duration_minutes"
+                  label="Duration (minutes)"
+                  type="number"
+                  value={course.duration_minutes}
+                  onChange={(e) => handleDurationChange(Number(e.target.value) || '')}
+                  error={!!errors.duration_minutes}
+                  helperText={errors.duration_minutes || ''}
+                  required
+                  fullWidth
+                  inputProps={{ min: 1, max: 300 }}
+                />
+              </FormControl>
             </Grid>
             
-            {/* Replaced Core Course toggle with Number of Classes dropdown */}
             <Grid item xs={12} md={6}>
-              <FormControl fullWidth>
-                <InputLabel id="num-classes-global-label">
-                  Number of Classes
-                </InputLabel>
+              <FormControl fullWidth margin="normal" sx={{ mt: 0 }}>
+                <InputLabel id="num-classes-global-label">Times offered per week</InputLabel>
                 <Select
                   labelId="num-classes-global-label"
-                  value={course.numClasses || 1}
-                  label="Number of Classes"
+                  id="numClasses"
+                  value={course.numClasses}
+                  label="Times offered per week"
                   onChange={(e) => handleNumClassesChange(Number(e.target.value))}
+                  fullWidth
                 >
-                  <MenuItem value={1}>Single (1)</MenuItem>
-                  <MenuItem value={2}>Dual (2)</MenuItem>
-                  <MenuItem value={3}>Triple (3)</MenuItem>
+                  <MenuItem value={1}>Once (1)</MenuItem>
+                  <MenuItem value={2}>Twice (2)</MenuItem>
+                  <MenuItem value={3}>Thrice (3)</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -572,8 +586,7 @@ const CourseForm: React.FC = () => {
             <Grid item xs={12}>
               <Typography variant="h6" sx={{ mt: 3, mb: 1 }}>Program Associations</Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Select which programs this course is associated with and specify if it's core for each program
-                and the number of classes.
+                Select which programs this course is associated with and specify if it's core for each program.
               </Typography>
   
               <Autocomplete
@@ -600,8 +613,7 @@ const CourseForm: React.FC = () => {
                           program_id: nv.program_id,
                           name: nv.name,
                           department_id: nv.department_id,
-                          is_core: false,
-                          num_classes: 1
+                          is_core: false
                         }));
         
                       return [...existing, ...newAssociations];
@@ -631,36 +643,40 @@ const CourseForm: React.FC = () => {
                     <Typography variant="subtitle1" gutterBottom>
                       Program Settings
                     </Typography>
-                  {programAssociations.map((association) => (
-                    <Box 
-                      key={association.program_id} 
-                      sx={{ 
-                        mb: 2, 
-                        p: 2, 
-                        border: '1px solid #e0e0e0', 
-                        borderRadius: 1,
-                        // Highlight the primary program with a different border
-                        borderColor: association.program_id === course.program_id ? '#00539F' : '#e0e0e0',
-                        borderWidth: association.program_id === course.program_id ? 2 : 1,
-                      }}
-                    >
-                      <Typography variant="subtitle2">
-                        {association.name} ({association.department_id})
-                        {association.program_id === course.program_id && (
-                          <Chip 
-                            label="Primary Program" 
-                            size="small" 
-                            color="primary" 
-                            sx={{ ml: 1 }}
-                          />
-                        )}
-                      </Typography>
-                      <Grid container spacing={2} sx={{ mt: 1 }}>
-                        <Grid item xs={12} md={6}>
+                  {programAssociations.map((association) => {
+                    // Debug logging inside the map function
+                    console.log(`Rendering program ${association.program_id} with is_core:`, association.is_core);
+                    
+                    return (
+                      <Box 
+                        key={association.program_id} 
+                        sx={{ 
+                          mb: 2, 
+                          p: 2, 
+                          border: '1px solid #e0e0e0', 
+                          borderRadius: 1,
+                          // Highlight the primary program with a different border
+                          borderColor: association.program_id === course.program_id ? '#00539F' : '#e0e0e0',
+                          borderWidth: association.program_id === course.program_id ? 2 : 1,
+                        }}
+                      >
+                        <Typography variant="subtitle2">
+                          {association.name} ({association.department_id})
+                          {association.program_id === course.program_id && (
+                            <Chip 
+                              label="Primary Program" 
+                              size="small" 
+                              color="primary" 
+                              sx={{ ml: 1 }}
+                            />
+                          )}
+                        </Typography>
+                        <Grid container spacing={2} sx={{ mt: 1 }}>
+                          <Grid item xs={12}>
                           <FormControlLabel
                             control={
                               <Switch
-                                checked={association.is_core}
+                                checked={Boolean(association.is_core)}
                                 onChange={(e) => handleProgramAssociationChange(
                                   association.program_id,
                                   'is_core',
@@ -670,31 +686,11 @@ const CourseForm: React.FC = () => {
                             }
                             label="Core Course in this Program"
                           />
+                          </Grid>
                         </Grid>
-                        <Grid item xs={12} md={6}>
-                          <FormControl fullWidth>
-                            <InputLabel id={`num-classes-${association.program_id}`}>
-                              Number of Classes
-                            </InputLabel>
-                            <Select
-                              labelId={`num-classes-${association.program_id}`}
-                              value={association.num_classes}
-                              label="Number of Classes"
-                              onChange={(e) => handleProgramAssociationChange(
-                                association.program_id,
-                                'num_classes',
-                                Number(e.target.value)
-                              )}
-                            >
-                              <MenuItem value={1}>Single (1)</MenuItem>
-                              <MenuItem value={2}>Dual (2)</MenuItem>
-                              <MenuItem value={3}>Triple (3)</MenuItem>
-                            </Select>
-                          </FormControl>
-                        </Grid>
-                      </Grid>
-                    </Box>
-                  ))}
+                      </Box>
+                    );
+                  })}
                 </Paper>
               )}
             </Grid>
