@@ -84,6 +84,7 @@ const CourseList: React.FC = () => {
     label: 'Semesters',
     minWidth: 120,
     format: (value: string[] | string | undefined | null) => {
+      console.log('Semester value:', value); // Add this debug log
       if (!value) return '';
       return Array.isArray(value) ? value.join(', ') : String(value);
       }
@@ -152,7 +153,67 @@ const CourseList: React.FC = () => {
     }
   }, [selectedProgram]);
 
+  const [initialLoadAttempted, setInitialLoadAttempted] = useState(false);
+  useEffect(() => {
+    const loadInitialCourses = async () => {
+      try {
+        setLoadingCourses(true);
+        // Try to load all courses
+        const data = await courseService.getAllCourses();
+        console.log('Initial courses load result:', data);
+        
+        if (data && data.length > 0) {
+          setCourses(data);
+        } else {
+          console.log('No courses found during initial load');
+        }
+      } catch (error) {
+        console.error('Error during initial courses load:', error);
+      } finally {
+        setLoadingCourses(false);
+        setInitialLoadAttempted(true);
+      }
+    };
+  
+    loadInitialCourses();
+  }, []);
+
+  // useEffect for initial loading of all courses
+useEffect(() => {
+  // Load all courses when component first mounts
+  loadAllCourses();
+}, []);
+
   // Updated loadCourses function using direct fetch
+  const loadAllCourses = async () => {
+    try {
+      setLoadingCourses(true);
+      const data = await courseService.getAllCourses();
+      
+      // Normalize course data to ensure consistent semester format
+      const normalizedCourses = data.map(course => ({
+        ...course,
+        program_id: course.program_id || 
+                 (course.programs && course.programs.length > 0 ? 
+                  course.programs[0].program_id : ''),
+        // Make sure semesters is always an array of actual values from the database
+        semesters: Array.isArray(course.semesters) ? course.semesters : 
+                 (course.semesters ? [course.semesters] : [])
+      }));
+      
+      setCourses(normalizedCourses);
+    } catch (error) {
+      console.error('Error loading all courses:', error);
+      setSnackbar({
+        open: true,
+        message: 'Failed to load courses',
+        severity: 'error'
+      });
+      setCourses([]);
+    } finally {
+      setLoadingCourses(false);
+    }
+  };
   const loadCourses = async (programId: string) => {
     try {
       setLoadingCourses(true);
@@ -322,7 +383,21 @@ const CourseList: React.FC = () => {
   };
 
   // Simplified filtering logic
-  const filteredCourses = courses.filter(course => {
+  // Simplified filtering logic
+const filteredCourses = courses.map(course => {
+  // Clone the course to avoid modifying the original
+  const courseCopy = {...course};
+  
+  // If it's in "All Courses" mode (no program selected) and we're filtering by semesters
+  if (!selectedProgram && selectedSemesters.length > 0) {
+    // Instead of showing all semesters, filter to only show the selected ones
+    // This makes the display consistent with what the user has selected
+    courseCopy.semesters = Array.isArray(courseCopy.semesters)
+      ? courseCopy.semesters.filter(sem => selectedSemesters.includes(sem))
+      : [];
+  }
+  return courseCopy;
+}).filter(course => {
     // Search filtering
     const searchMatch = !searchTerm || 
       course.course_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -331,18 +406,21 @@ const CourseList: React.FC = () => {
     // Core course filtering
     const coreMatch = !showCoreOnly || course.is_core;
     
-    // Semester filtering - temporarily simplified
+    // Semester filtering
     const semesterMatch = selectedSemesters.length === 0 || 
       (course.semesters && course.semesters.some(sem => 
         selectedSemesters.includes(sem)
       ));
     
-    console.log(
-      `Course ${course.course_id} - search: ${searchMatch}, core: ${coreMatch}, semester: ${semesterMatch}`,
-      `Semesters: ${JSON.stringify(course.semesters)}`
-    );
+    // Department filtering - only apply if a department is selected
+    const departmentMatch = !selectedDepartment || selectedDepartment === 'ALL' || 
+      course.department_id === selectedDepartment;
     
-    return searchMatch && coreMatch && semesterMatch;
+    // Program filtering - only apply if a program is selected
+    const programMatch = !selectedProgram || 
+      (course.program_id === selectedProgram);
+    
+    return searchMatch && coreMatch && semesterMatch && departmentMatch && programMatch;
   });
 
   // Debug logging
@@ -455,45 +533,42 @@ const CourseList: React.FC = () => {
 
       {loadingDepartments || loadingPrograms || loadingCourses ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
-          <CircularProgress />
-        </Box>
-      ) : (
-        <>
-          {!selectedDepartment ? (
-            <Box sx={{ textAlign: 'center', py: 4 }}>
-              <Typography variant="h6" color="text.secondary">
-                Please select a department to view programs
-              </Typography>
-            </Box>
-          ) : !selectedProgram ? (
-            <Box sx={{ textAlign: 'center', py: 4 }}>
-              <Typography variant="h6" color="text.secondary">
-                Please select a program to view courses
-              </Typography>
-            </Box>
-          ) : filteredCourses.length === 0 ? (
-            <Box sx={{ textAlign: 'center', py: 4 }}>
-              <Typography variant="h6" color="text.secondary">
-                No courses found for this program
-              </Typography>
-            </Box>
-          ) : (
-            <DataTable
-              columns={columns}
-              data={filteredCourses.map(c => {
-                console.log(`Course ${c.course_id} in DataTable has is_core=${c.is_core}`);
-                return c;
-              })}
-              title={`Courses - ${programs.find(p => p.program_id === selectedProgram)?.name || ''}`}
-              onEdit={handleEditCourse}
-              onDelete={handleDeleteClick}
-              onRowClick={handleRowClick}
-              selectable
-            />
-          )}
-        </>
-      )}
-
+        <CircularProgress />
+      </Box>
+    ) : initialLoadAttempted && courses.length === 0 && !selectedDepartment && !selectedProgram ? (
+      <Box sx={{ textAlign: 'center', py: 4 }}>
+        <Typography variant="h6" color="text.secondary" gutterBottom>
+          No courses found in the system
+        </Typography>
+        <Typography variant="body1" color="text.secondary">
+          To add a new course, click the "ADD COURSE" button in the top right corner.
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mt: 2 }}>
+          Or select a department and program to view specific courses.
+        </Typography>
+      </Box>
+    ) : filteredCourses.length === 0 ? (
+      <Box sx={{ textAlign: 'center', py: 4 }}>
+        <Typography variant="h6" color="text.secondary" gutterBottom>
+          No courses match your current filters
+        </Typography>
+        <Typography variant="body1" color="text.secondary">
+          Try changing your department, program, or semester selections.
+        </Typography>
+      </Box>
+    ) : (
+      <DataTable
+        columns={columns}
+        data={filteredCourses}
+        title={selectedProgram 
+          ? `Courses - ${programs.find(p => p.program_id === selectedProgram)?.name || ''}` 
+          : "All Courses"}
+        onEdit={handleEditCourse}
+        onDelete={handleDeleteClick}
+        onRowClick={handleRowClick}
+        selectable
+      />
+    )}
       <ConfirmDialog
         open={deleteDialogOpen}
         title="Delete Course"

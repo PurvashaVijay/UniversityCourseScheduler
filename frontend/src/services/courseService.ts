@@ -1,12 +1,13 @@
 // src/services/courseService.ts
 // program association interface
-  export interface ProgramAssociation {
-    program_id: string;
-    name?: string;
-    department_id?: string;
-    is_core: boolean;
-    num_classes?: number; // Make num_classes optional
-  }
+export interface ProgramAssociation {
+  program_id: string;
+  name?: string;
+  department_id?: string;
+  is_core: boolean;
+  num_classes?: number; // Make num_classes optional
+}
+
 // Updated Course interface with correct fields and optional properties
 export interface Course {
   course_id: string;
@@ -18,12 +19,12 @@ export interface Course {
   duration_minutes: number;
   is_core: boolean;
   numClasses?: number; // Add this new field
+  num_classes?: number; // Snake case version
   semesters?: string[];  // Optional array of semesters
   semester?: string;     // Optional single semester
   created_at: string;
   updated_at: string;
   program?: any;
-  //programs?: any[];      // For courses with multiple programs
   programs?: ProgramAssociation[];  // Add this for multiple programs
   program_associations?: ProgramAssociation[];  // For sending to API
   prerequisites?: any[];
@@ -71,8 +72,8 @@ export const getCoursesByProgram = async (programId: string): Promise<Course[]> 
       department_id: course.department_id || '',
       duration_minutes: course.duration_minutes || 0,
       is_core: Boolean(course.is_core), // Explicitly convert to boolean
-      // Map the num_classes field to numClasses for frontend use
-      numClasses: course.num_classes || 1,
+      // Check both numClasses and num_classes
+      numClasses: course.numClasses || course.num_classes || 1,
       // Ensure semesters is always an array
       semesters: Array.isArray(course.semesters) ? course.semesters : 
                (course.semesters ? [course.semesters] : []),
@@ -392,8 +393,8 @@ export const getCourseById = async (id: string): Promise<Course | null> => {
       department_id: data.department_id || '',
       duration_minutes: data.duration_minutes || 0,
       is_core: Boolean(data.is_core),
-      // Extract numClasses from the response
-      numClasses: data.numClasses || (data.num_classes || 1),
+      // Check both numClasses and num_classes properties
+      numClasses: data.numClasses || data.num_classes || 1,
       // Include other fields as needed
       program_id: data.program_id || (data.programs && data.programs.length > 0 ? data.programs[0].program_id : ''),
       programs: data.programs || [],
@@ -445,61 +446,58 @@ export const debugCoursesByProgram = async (programId: string): Promise<any> => 
   }
 };
 
+// Get all courses - enhanced with proper handling of numClasses and semesters
+const getAllCourses = async (): Promise<Course[]> => {
+  try {
+    const token = localStorage.getItem('token');
+    console.log("Attempting to fetch all courses with token:", token ? "Token exists" : "No token");
+    
+    const response = await fetch(`${API_URL}/courses`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    console.log("Response status:", response.status, response.statusText);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Error response:", errorText);
+      throw new Error(`Failed to fetch courses: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    console.log("Courses data received:", data);
+    
+    // Process and normalize data to ensure consistency
+    const normalizedCourses = data.map((course: Course) => ({
+      ...course,
+       // Ensure program_id is extracted from Programs array if available
+       program_id: course.program_id || 
+       (course.programs && course.programs.length > 0 ? 
+        course.programs[0].program_id : ''),
+      // Ensure course_name/name consistency
+      course_name: course.course_name || course.name || '',
+      name: course.course_name || course.name || '',
+      // Ensure numClasses is properly set - check both possible property names
+      numClasses: course.numClasses || course.num_classes || 1,
+      // Ensure semesters array exists
+      semesters: Array.isArray(course.semesters) ? course.semesters : 
+               (course.semesters ? [course.semesters] : [])
+    }));
+    
+    console.log("Normalized courses:", normalizedCourses);
+    return normalizedCourses;
+  } catch (error) {
+    console.error('Error fetching courses:', error);
+    // Return empty array but log the detailed error
+    return [];
+  }
+};
+
 const courseService = {
-  getAllCourses: async (): Promise<Course[]> => {
-    try {
-      const token = localStorage.getItem('token');
-      console.log("Attempting to fetch all courses with token:", token ? "Token exists" : "No token");
-      
-      const response = await fetch(`${API_URL}/courses`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      console.log("Response status:", response.status, response.statusText);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Error response:", errorText);
-        throw new Error(`Failed to fetch courses: ${response.status} - ${errorText}`);
-      }
-
-      const data = await response.json();
-      console.log("Courses data received:", data);
-      return data;
-    } catch (error) {
-      console.error('Error fetching courses:', error);
-      // Return empty array but log the detailed error
-      return [];
-    }
-  },
-  
-  
-
-  getCoursesByProfessor: async (professorId: string): Promise<Course[]> => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/courses/professor/${professorId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch courses by professor');
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error(`Error fetching courses for professor ${professorId}:`, error);
-      return [];
-    }
-  },
-  
-  // Including the updated methods in the courseService object
+  getAllCourses,
   getCourseById,
   getCoursesByProgram,
   createCourse,
@@ -510,4 +508,4 @@ const courseService = {
   debugCoursesByProgram
 };
 
-export default courseService;
+export default courseService; 

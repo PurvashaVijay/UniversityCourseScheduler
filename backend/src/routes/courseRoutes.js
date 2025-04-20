@@ -22,7 +22,7 @@ router.delete('/:id', authenticate, authorize('admin'), courseController.deleteC
 router.post('/batch-delete', authenticate, authorize('admin'), courseController.deleteCourses);
 
 // Debugging route
-router.get('/debug/:programId', authenticate, courseController.debugCourses);
+//router.get('/debug/:programId', authenticate, courseController.debugCourses);
 
 // Additional routes for filtering
 router.get('/department/:departmentId', authenticate, courseController.getCoursesByDepartment);

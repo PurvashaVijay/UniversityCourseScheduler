@@ -1,14 +1,14 @@
-// courseController.js - Updated with the new getCourseProfessorAssignments method
+// courseController.js
 
 const { Op } = require('sequelize');
-
 const { Course, Department, Program, CourseProgram, CoursePrerequisite, CourseSemester, ProfessorCourse, Professor } = require('../../app/models');
 const { sequelize } = require('../../src/config/database');
 const { v4: uuidv4 } = require('uuid');
 
-// Get all courses
+// Get all courses with semesters and num_classes
 exports.getAllCourses = async (req, res) => {
   try {
+    // Get all courses with their departments and programs
     const courses = await Course.findAll({
       include: [
         { model: Department, attributes: ['name'] },
@@ -25,14 +25,43 @@ exports.getAllCourses = async (req, res) => {
         }
       ]
     });
-    return res.status(200).json(courses);
+    
+    // Process courses to include all needed data
+    const processedCourses = await Promise.all(courses.map(async (course) => {
+      const courseData = course.toJSON();
+      // Extract the primary program_id if available
+      if (courseData.Programs && courseData.Programs.length > 0) {
+        courseData.program_id = courseData.Programs[0].program_id;
+      }
+      
+      // Get semesters for this course
+      const courseSemesters = await CourseSemester.findAll({
+        where: { course_id: course.course_id }
+      });
+      
+      // Add semesters to course data
+      courseData.semesters = courseSemesters.map(sem => sem.semester);
+      
+      // Get the CourseProgram records for this course to get numClasses
+      const coursePrograms = await CourseProgram.findAll({
+        where: { course_id: course.course_id }
+      });
+      
+      // Set the num_classes from the database, fallback to 1 if not found
+      courseData.num_classes = coursePrograms.length > 0 ? 
+        (coursePrograms[0].num_classes || 1) : 1;
+      
+      return courseData;
+    }));
+    
+    return res.status(200).json(processedCourses);
   } catch (error) {
     console.error('Error retrieving courses:', error);
     return res.status(500).json({ message: 'Failed to retrieve courses' });
   }
 };
 
-// In getCourseById function
+// Get course by ID with semesters and num_classes
 exports.getCourseById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -86,7 +115,7 @@ exports.getCourseById = async (req, res) => {
       programMap[program.program_id] = program;
     });
 
-    // Get num_classes from the first CourseProgram record (for primary program)
+    // Get num_classes from the first CourseProgram record
     const numClasses = coursePrograms.length > 0 ? 
       (coursePrograms[0].num_classes || 1) : 1;
 
@@ -115,7 +144,7 @@ exports.getCourseById = async (req, res) => {
       duration_minutes: course.duration_minutes,
       is_core: course.is_core,
       program_id: coursePrograms.length > 0 ? coursePrograms[0].program_id : null,
-      numClasses: numClasses, // Make sure to include numClasses in the response
+      num_classes: numClasses, // Include numClasses in the response
       programs: programsWithDetails,
       prerequisites: course.prerequisites,
       department: course.Department,
@@ -132,7 +161,7 @@ exports.getCourseById = async (req, res) => {
   }
 };
 
-// NEW METHOD: Get course with semesters
+// Get course with semesters
 exports.getCourseWithSemesters = async (req, res) => {
   try {
     const courseId = req.params.id;
@@ -176,7 +205,7 @@ exports.getCourseWithSemesters = async (req, res) => {
   }
 };
 
-// Add this to courseController.js - NEW ENDPOINT
+// Get course-professor assignments
 exports.getCourseProfessorAssignments = async (req, res) => {
   try {
     const courseId = req.params.id;
@@ -218,8 +247,72 @@ exports.getCourseProfessorAssignments = async (req, res) => {
     return res.status(500).json({ message: 'Failed to get course-professor assignments' });
   }
 };
+// Get courses by program - enhanced for num_classes and semesters
+exports.getCoursesByProgram = async (req, res) => {
+  try {
+    const programId = req.params.programId;
+    
+    // Find all CourseProgram records for this program
+    const coursePrograms = await CourseProgram.findAll({
+      where: { program_id: programId }
+    });
+    
+    // Extract course IDs and create Maps to store is_required and num_classes values
+    const courseIds = [];
+    const courseRequiredMap = new Map();
+    const courseNumClassesMap = new Map();
+    
+    coursePrograms.forEach(cp => {
+      courseIds.push(cp.course_id);
+      courseRequiredMap.set(cp.course_id, cp.is_required === true);
+      courseNumClassesMap.set(cp.course_id, cp.num_classes || 1);
+    });
+    
+    console.log(`Found ${courseIds.length} course IDs for program ${programId}`);
+    
+    if (courseIds.length === 0) {
+      return res.status(200).json([]);
+    }
+    
+    // Get course details
+    const courses = await Course.findAll({
+      where: {
+        course_id: courseIds
+      },
+      include: [{ model: Department }]
+    });
+    
+    console.log(`Retrieved ${courses.length} course details`);
+    
+    // Get semester data for each course and add other data from maps
+    const results = await Promise.all(courses.map(async (course) => {
+      const courseJson = course.toJSON();
+      
+      // Query for semesters
+      const semesters = await CourseSemester.findAll({
+        where: { course_id: course.course_id }
+      });
+      
+      // Add semesters to course data
+      courseJson.semesters = semesters.map(sem => sem.semester);
+      
+      // Add is_required (is_core) status specifically for this program
+      courseJson.is_core = courseRequiredMap.get(course.course_id) === true;
+      
+      // Add num_classes from the map
+      courseJson.num_classes = courseNumClassesMap.get(course.course_id) || 1;
+      
+      return courseJson;
+    }));
+    
+    return res.status(200).json(results);
+  } catch (error) {
+    console.error('Error retrieving program courses:', error);
+    return res.status(500).json({ message: 'Failed to retrieve program courses' });
+  }
+};
 
-// Create new course - Updated to respect user-provided ID
+// Create new course - updated to respect user-provided ID
 exports.createCourse = async (req, res) => {
   // Use a transaction to ensure data consistency
   const t = await sequelize.transaction();
@@ -274,7 +367,6 @@ exports.createCourse = async (req, res) => {
       duration_minutes: duration_minutes || 55,
       is_core: Boolean(is_core) // Proper boolean conversion
     }, { transaction: t });
-    
     console.log('Course created successfully:', newCourse.course_id);
     
     // Handle program associations
@@ -306,20 +398,6 @@ exports.createCourse = async (req, res) => {
           program_id,
           is_required: is_core === true,
           num_classes: numClasses || 1 // Use global numClasses, default to 1
-        }, { transaction: t });
-      } catch (associationError) {
-        console.error('Error creating program association:', associationError);
-        throw associationError; // Re-throw to trigger transaction rollback
-      }
-    } else if (program_id) {
-      // Backward compatibility with old format
-      try {
-        await CourseProgram.create({
-          course_program_id: `CP-${uuidv4().substring(0, 8)}`,
-          course_id: newCourse.course_id,
-          program_id,
-          is_required: is_core === true,
-          num_classes: 1 // Default to single class
         }, { transaction: t });
       } catch (associationError) {
         console.error('Error creating program association:', associationError);
@@ -608,8 +686,6 @@ exports.deleteCourses = async (req, res) => {
     });
   }
 };
-
-// Get courses by department
 exports.getCoursesByDepartment = async (req, res) => {
   try {
     const departmentId = req.params.departmentId;
@@ -632,72 +708,6 @@ exports.getCoursesByDepartment = async (req, res) => {
     return res.status(500).json({ message: 'Failed to retrieve department courses' });
   }
 };
-
-// Modified getCoursesByProgram function to include semesters
-exports.getCoursesByProgram = async (req, res) => {
-  try {
-    const programId = req.params.programId;
-    
-    // Find all CourseProgram records for this program
-    const coursePrograms = await CourseProgram.findAll({
-      where: { program_id: programId }
-    });
-    
-    // Extract course IDs and create Maps to store both is_required and num_classes values
-    const courseIds = [];
-    const courseRequiredMap = new Map(); // This map was missing or undefined
-    const courseNumClassesMap = new Map();
-    
-    coursePrograms.forEach(cp => {
-      courseIds.push(cp.course_id);
-      courseRequiredMap.set(cp.course_id, cp.is_required === true);
-      courseNumClassesMap.set(cp.course_id, cp.num_classes || 1);
-    });
-    
-    console.log(`Found ${courseIds.length} course IDs for program ${programId}`);
-    
-    if (courseIds.length === 0) {
-      return res.status(200).json([]);
-    }
-    
-    // Get course details
-    const courses = await Course.findAll({
-      where: {
-        course_id: courseIds
-      },
-      include: [{ model: Department }]
-    });
-    
-    console.log(`Retrieved ${courses.length} course details`);
-    
-    // Get semester data for each course and add other data from maps
-    const results = await Promise.all(courses.map(async (course) => {
-      const courseJson = course.toJSON();
-      
-      // Query for semesters
-      const semesters = await CourseSemester.findAll({
-        where: { course_id: course.course_id }
-      });
-      
-      // Add semesters to course data
-      courseJson.semesters = semesters.map(sem => sem.semester);
-      
-      // Add is_required (is_core) status specifically for this program
-      courseJson.is_core = courseRequiredMap.get(course.course_id) === true;
-      
-      // Add num_classes from the map
-      courseJson.num_classes = courseNumClassesMap.get(course.course_id) || 1;
-      
-      return courseJson;
-    }));
-    
-    return res.status(200).json(results);
-  } catch (error) {
-    console.error('Error retrieving program courses:', error);
-    return res.status(500).json({ message: 'Failed to retrieve program courses' });
-  }
-};
-
 // Debug endpoint for program courses
 exports.debugCourses = async (req, res) => {
   try {

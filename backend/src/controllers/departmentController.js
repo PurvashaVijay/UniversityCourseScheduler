@@ -78,6 +78,30 @@ const models = require('../../app/models');
 const Department = models.Department; 
 const { v4: uuidv4 } = require('uuid');
 
+//getProgramsByDepartment method
+exports.getProgramsByDepartment = async (req, res) => {
+  try {
+    const departmentId = req.params.departmentId;
+    
+    // Handle "ALL" as a special case
+    if (departmentId === 'ALL') {
+      // Get all programs instead of filtering by department
+      const programs = await Program.findAll();
+      return res.status(200).json(programs);
+    }
+    
+    // Otherwise, get programs for the specific department
+    const programs = await Program.findAll({
+      where: { department_id: departmentId }
+    });
+    
+    return res.status(200).json(programs);
+  } catch (error) {
+    console.error('Error retrieving department programs:', error);
+    return res.status(500).json({ message: 'Failed to retrieve department programs' });
+  }
+};
+
 // Get all departments
 exports.getAllDepartments = async (req, res) => {
   try {
