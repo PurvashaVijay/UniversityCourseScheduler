@@ -140,11 +140,17 @@ export const getAllSchedules = async (): Promise<Schedule[]> => {
 };
 
 // Get schedule by ID
-export const getScheduleById = async (scheduleId: string): Promise<Schedule | null> => {
+export const getScheduleById = async (scheduleId: string, programId?: string): Promise<Schedule | null> => {
   try {
     const token = authService.getToken();
     
-    const response = await fetch(`${API_URL}/schedules/${scheduleId}`, {
+    // Build URL with query parameters if program_id exists
+    let url = `${API_URL}/schedules/${scheduleId}`;
+    if (programId) {
+      url += `?program_id=${programId}`;
+    }
+    
+    const response = await fetch(url, {
       headers: {
         'Authorization': `Bearer ${token}`
       }
@@ -160,15 +166,12 @@ export const getScheduleById = async (scheduleId: string): Promise<Schedule | nu
     return null;
   }
 };
-
 // Get schedules by semester
 // Get schedules by semester
-
-// Update getSchedulesBySemester in scheduleService.ts
+// In scheduleService.ts
 export const getSchedulesBySemester = async (
   semesterId: string,
-  departmentId?: string,
-  programId?: string
+  programId?: string // Optional program ID for filtering
 ): Promise<Schedule[]> => {
   try {
     const token = authService.getToken();
@@ -176,15 +179,9 @@ export const getSchedulesBySemester = async (
     // Build URL with query parameters
     let url = `${API_URL}/schedules/semester/${semesterId}`;
     
-    // Add query parameters for department and program if they exist
-    const params = new URLSearchParams();
-    if (departmentId) params.append('department_id', departmentId);
-    if (programId) params.append('program_id', programId);
-    
-    // Append parameters to URL if they exist
-    const queryString = params.toString();
-    if (queryString) {
-      url += '?' + queryString;
+    // Add query parameter for program if it exists
+    if (programId) {
+      url += `?program_id=${programId}`;
     }
     
     console.log('Fetching schedules with URL:', url);
@@ -196,14 +193,10 @@ export const getSchedulesBySemester = async (
     });
     
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Error response:', errorText);
-      throw new Error(`Failed to fetch schedules: ${response.status} - ${errorText}`);
+      throw new Error('Failed to fetch schedules');
     }
     
-    const data = await response.json();
-    console.log(`Received ${data.length} schedules from API`);
-    return data;
+    return await response.json();
   } catch (error) {
     console.error(`Error fetching schedules for semester ${semesterId}:`, error);
     return [];
@@ -211,11 +204,20 @@ export const getSchedulesBySemester = async (
 };
 
 // Get scheduled courses for a schedule
-export const getScheduledCourses = async (scheduleId: string): Promise<ScheduledCourse[]> => {
+export const getScheduledCourses = async (
+  scheduleId: string, 
+  programId?: string
+): Promise<ScheduledCourse[]> => {
   try {
     const token = authService.getToken();
     
-    const response = await fetch(`${API_URL}/schedules/${scheduleId}/courses`, {
+    // Build URL with query parameters if program_id exists
+    let url = `${API_URL}/schedules/${scheduleId}/courses`;
+    if (programId) {
+      url += `?program_id=${programId}`;
+    }
+    
+    const response = await fetch(url, {
       headers: {
         'Authorization': `Bearer ${token}`
       }

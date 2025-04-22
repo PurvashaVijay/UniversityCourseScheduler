@@ -108,5 +108,25 @@ function defineAssociations() {
   Course.belongsToMany(Professor, { through: ProfessorCourse, foreignKey: 'course_id', otherKey: 'professor_id' });
 
 }
+// ✅ Pass `models` as a parameter
+module.exports = (models) => {
+  models.Course.belongsToMany(models.Program, {
+    through: models.CourseProgram,
+    foreignKey: 'course_id',
+    otherKey: 'program_id'
+  });
+
+  models.Program.belongsToMany(models.Course, {
+    through: models.CourseProgram,
+    foreignKey: 'program_id',
+    otherKey: 'course_id'
+  });
+
+  models.Course.hasMany(models.CourseProgram, { foreignKey: 'course_id' });
+  models.CourseProgram.belongsTo(models.Course, { foreignKey: 'course_id' });
+
+  // Add any other associations here if needed
+};
+
 
 module.exports = defineAssociations;
