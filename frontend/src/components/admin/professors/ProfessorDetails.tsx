@@ -81,6 +81,10 @@ const ProfessorDetails: React.FC = () => {
         // Fetch professor details
         const professorData = await professorService.getProfessorById(id);
         console.log('Professor data received:', professorData);
+        
+        // Log to see what semesters we actually have
+        console.log('Professor semesters in details view:', professorData.semesters);
+        
         setProfessor(professorData);
         
         // Department data should already be included in the professor details
@@ -164,6 +168,37 @@ const ProfessorDetails: React.FC = () => {
     );
   };
 
+  // Collect all unique semesters from all courses
+  const getAllSemesters = () => {
+    const allSemesters = new Set<string>();
+    
+    // Add semesters from professor.semesters if available
+    if (professor?.semesters && Array.isArray(professor.semesters)) {
+      professor.semesters.forEach(semester => allSemesters.add(semester));
+    }
+    
+    // Add from professor.course_semesters if available
+    if (professor?.course_semesters) {
+      Object.values(professor.course_semesters).forEach(semesters => {
+        if (Array.isArray(semesters)) {
+          semesters.forEach(semester => allSemesters.add(semester));
+        }
+      });
+    }
+    
+    // Also add semesters from each course's professor_course association
+    if (assignedCourses && assignedCourses.length > 0) {
+      assignedCourses.forEach(course => {
+        const semester = course.professor_course?.semester || course.semester;
+        if (semester) {
+          allSemesters.add(semester);
+        }
+      });
+    }
+    
+    return Array.from(allSemesters);
+  };
+
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
@@ -179,6 +214,9 @@ const ProfessorDetails: React.FC = () => {
       </Box>
     );
   }
+
+  // Get all unique semesters
+  const allSemesters = getAllSemesters();
 
   return (
     <Container maxWidth="lg">
@@ -207,12 +245,12 @@ const ProfessorDetails: React.FC = () => {
                 Department: {department?.name || 'Unknown Department'}
               </Typography>
               
-              {/* Show semester tags */}
-              {professor.semesters && professor.semesters.length > 0 && (
+              {/* Show semester tags - updated to use allSemesters */}
+              {allSemesters.length > 0 && (
                 <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Typography variant="body1">Semesters:</Typography>
                   <Box sx={{ display: 'flex', gap: 0.5 }}>
-                    {professor.semesters.map(semester => (
+                    {allSemesters.map(semester => (
                       <Chip
                         key={semester}
                         label={semester}
@@ -293,9 +331,9 @@ const ProfessorDetails: React.FC = () => {
                     <ListItemText
                       primary="Semesters"
                       secondary={
-                        professor.semesters && professor.semesters.length > 0 ? (
+                        allSemesters.length > 0 ? (
                           <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5 }}>
-                            {professor.semesters.map(semester => (
+                            {allSemesters.map(semester => (
                               <Chip
                                 key={semester}
                                 label={semester}
@@ -341,21 +379,50 @@ const ProfessorDetails: React.FC = () => {
                             <TableCell>{course.is_core ? 'Core' : 'Elective'}</TableCell>
                             <TableCell>{course.duration_minutes} minutes</TableCell>
                             <TableCell>
-                              {course.semester ? (
-                                <Chip
-                                  label={course.semester}
-                                  color={course.semester === 'Fall' ? 'warning' : 'success'}
-                                  size="small"
-                                />
-                              ) : course.professor_course?.semester ? (
-                                <Chip
-                                  label={course.professor_course.semester}
-                                  color={course.professor_course.semester === 'Fall' ? 'warning' : 'success'}
-                                  size="small"
-                                />
-                              ) : (
-                                'Not specified'
-                              )}
+                              {(() => {
+                                // Get all semesters for this specific course from all sources
+                                const courseSemesters = new Set<string>();
+                                
+                                // Check direct semester assignment on the course
+                                if (course.semester) {
+                                  courseSemesters.add(course.semester);
+                                }
+                                
+                                // Check professor_course association
+                                if (course.professor_course?.semester) {
+                                  courseSemesters.add(course.professor_course.semester);
+                                }
+                                
+                                // Also check course_semesters if available
+                                if (professor.course_semesters && professor.course_semesters[course.course_id]) {
+                                  professor.course_semesters[course.course_id].forEach(sem => 
+                                    courseSemesters.add(sem)
+                                  );
+                                }
+                                
+                                // If we have allSemesters but no course-specific semesters, use allSemesters
+                                if (courseSemesters.size === 0 && allSemesters.length > 0) {
+                                  allSemesters.forEach(sem => courseSemesters.add(sem));
+                                }
+                                
+                                // Convert set to array for rendering
+                                const semestersArray = Array.from(courseSemesters);
+                                
+                                return semestersArray.length > 0 ? (
+                                  <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                    {semestersArray.map(sem => (
+                                      <Chip
+                                        key={sem}
+                                        label={sem}
+                                        color={sem === 'Fall' ? 'warning' : 'success'}
+                                        size="small"
+                                      />
+                                    ))}
+                                  </Box>
+                                ) : (
+                                  'Not specified'
+                                );
+                              })()}
                             </TableCell>
                           </TableRow>
                         ))}

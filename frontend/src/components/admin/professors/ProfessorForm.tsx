@@ -159,20 +159,99 @@ const ProfessorForm: React.FC<ProfessorFormProps> = ({
       // Debug log to see if course_ids exists
       console.log('Course IDs from professor:', professor.course_ids);
       
+      // Create a comprehensive set of all semesters from all sources
+      const allSemesters = new Set<string>();
+      
+      // Add from direct professor.semesters
+      if (professor.semesters && Array.isArray(professor.semesters)) {
+        professor.semesters.forEach(semester => allSemesters.add(semester));
+      }
+      
+      // Also check course_semesters
+      if (professor.course_semesters) {
+        Object.values(professor.course_semesters).forEach(semesters => {
+          if (Array.isArray(semesters)) {
+            semesters.forEach(semester => allSemesters.add(semester));
+          }
+        });
+      }
+      
+      // Also check individual course professor_course associations
+      if (professor.courses && Array.isArray(professor.courses)) {
+        professor.courses.forEach(course => {
+          if (course.professor_course?.semester) {
+            allSemesters.add(course.professor_course.semester);
+          }
+        });
+      }
+      
+      console.log('All semesters collected:', Array.from(allSemesters));
+      
       // Check if professor has course_ids
       if (professor.course_ids && Array.isArray(professor.course_ids) && professor.course_ids.length > 0) {
-        console.log('Found course IDs, setting selections');
+        console.log('Professor data for course selections:', professor);
         
-        // Create course selections from the course_ids array
+        // Create a mapping of course_id -> array of semesters
+        const courseSemestersMap: {[courseId: string]: string[]} = {};
+        
+        // If we have courses from the API
+        if (professor.courses && Array.isArray(professor.courses)) {
+          // Process each course's semester data
+          professor.courses.forEach(course => {
+            const courseId = course.course_id;
+            const semester = course.professor_course?.semester;
+            
+            if (courseId && semester) {
+              if (!courseSemestersMap[courseId]) {
+                courseSemestersMap[courseId] = [];
+              }
+              
+              // Add semester if not already in the array
+              if (!courseSemestersMap[courseId].includes(semester)) {
+                courseSemestersMap[courseId].push(semester);
+              }
+            }
+          });
+        }
+        
+        // Also check if we have course_semesters data directly
+        if (professor.course_semesters) {
+          Object.keys(professor.course_semesters).forEach(courseId => {
+            const semesters = professor.course_semesters![courseId];
+            if (!courseSemestersMap[courseId]) {
+              courseSemestersMap[courseId] = [];
+            }
+            
+            // Add each semester if not already in the array
+            semesters.forEach(semester => {
+              if (!courseSemestersMap[courseId].includes(semester)) {
+                courseSemestersMap[courseId].push(semester);
+              }
+            });
+          });
+        }
+        
+        console.log('Course semesters map created:', courseSemestersMap);
+        
+        // Now create the course selections
         const selections = professor.course_ids.map(courseId => {
+          // Get the semesters for this course from our map
+          // Fall back to all collected semesters, and finally to ['Fall'] if nothing else
+          const semesters = 
+            (courseSemestersMap[courseId] && courseSemestersMap[courseId].length > 0) 
+              ? courseSemestersMap[courseId] 
+              : (allSemesters.size > 0)
+                ? Array.from(allSemesters)
+                : ['Fall'];
+          
           return {
             courseId,
-            selectedSemesters: professor.semesters || ['Fall'],
+            selectedSemesters: semesters,
             disabledSemesters: {}
           };
         });
         
-        console.log('Setting course selections:', selections);
+        console.log('Setting course selections with proper semesters:', selections);
         setCourseSelections(selections);
         
         // Fetch semester data for each course

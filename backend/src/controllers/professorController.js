@@ -3,7 +3,6 @@ const { Op } = require('sequelize');
 const { Professor, Department, Course, CourseSemester, ProfessorCourse } = require('../../app/models');
 const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
-
 // Add this function to check if a course is already assigned to another professor for a specific semester
 const isCourseSemesterAlreadyAssigned = async (courseId, semester, excludeProfessorId = null) => {
   try {
@@ -45,14 +44,35 @@ exports.getAllProfessors = async (req, res) => {
     const results = await Promise.all(professors.map(async (professor) => {
       const professorData = professor.toJSON();
       
-      // Extract course IDs and semesters from the professor_course join table
+      // Get all professor_course entries for this professor
+      const professorCourses = await ProfessorCourse.findAll({
+        where: { professor_id: professor.professor_id }
+      });
+      
+      // Extract course IDs from all course associations
       const courses = professorData.courses || [];
       const courseIds = courses.map(course => course.course_id);
       
-      // Get unique semesters from professor_course associations
-      const semesters = [...new Set(courses
-        .map(course => course.professor_course?.semester)
-        .filter(Boolean))];
+      // Get ALL unique semesters from ALL professor_course entries
+      const allSemesters = new Set();
+      
+      // Add semesters from courses in the join
+      courses.forEach(course => {
+        if (course.professor_course?.semester) {
+          allSemesters.add(course.professor_course.semester);
+        }
+      });
+      
+      // Also add semesters from direct professor_course query
+      professorCourses.forEach(pc => {
+        if (pc.semester) {
+          allSemesters.add(pc.semester);
+        }
+      });
+      
+      const semesters = Array.from(allSemesters);
+      
+      console.log(`Professor ${professor.professor_id} semesters:`, semesters);
       
       return {
         ...professorData,
@@ -194,23 +214,52 @@ exports.getProfessorById = async (req, res) => {
       };
     }) : [];
     
+    // IMPORTANT: Get additional professor_course data to ensure we have ALL semesters
+    // This direct query will ensure we get all semesters for each course
+    const professorCourses = await ProfessorCourse.findAll({
+      where: { professor_id: req.params.id }
+    });
+    
+    console.log(`Found ${professorCourses.length} direct professor_course records`);
+    
     // Extract course IDs and build course_semesters object
     const courseIds = courses.map(course => course.course_id);
     const courseSemesters = {};
     
-    courses.forEach(course => {
-      if (course.course_id && course.semester) {
-        if (!courseSemesters[course.course_id]) {
-          courseSemesters[course.course_id] = [];
+    // Process professor_course records to get ALL semesters
+    professorCourses.forEach(pc => {
+      if (pc.course_id && pc.semester) {
+        if (!courseSemesters[pc.course_id]) {
+          courseSemesters[pc.course_id] = [];
         }
-        courseSemesters[course.course_id].push(course.semester);
+        
+        // Add semester if not already in the array
+        if (!courseSemesters[pc.course_id].includes(pc.semester)) {
+          courseSemesters[pc.course_id].push(pc.semester);
+        }
       }
     });
     
     // Get unique semesters (remove duplicates and null values)
-    const semesters = [...new Set(courses
-      .map(course => course.professor_course?.semester)
-      .filter(Boolean))];
+    const semesters = [];
+Object.values(courseSemesters).forEach(semesterArray => {
+  semesterArray.forEach(semester => {
+    if (semester && !semesters.includes(semester)) {
+      semesters.push(semester);
+    }
+  });
+});
+
+// Also check for semesters in professor_course records directly
+const professorCourseRecords = await ProfessorCourse.findAll({
+  where: { professor_id: req.params.id }
+});
+
+professorCourseRecords.forEach(record => {
+  if (record.semester && !semesters.includes(record.semester)) {
+    semesters.push(record.semester);
+  }
+});
     
     // Create the final response object
     const response = {
@@ -343,35 +392,53 @@ exports.updateProfessor = async (req, res) => {
     
     // Handle course assignments if provided
     if (course_ids && Array.isArray(course_ids) && course_semesters) {
-      // Remove existing course assignments
-      await ProfessorCourse.destroy({
-        where: { professor_id: professorId }
-      });
+      console.log('Updating course assignments for professor:', professorId);
+      console.log('Course IDs:', course_ids);
+      console.log('Course semesters data:', JSON.stringify(course_semesters));
+      
+      try {
+        // First delete all existing course assignments
+        console.log('Deleting existing course assignments for professor:', professorId);
+        const deleted = await ProfessorCourse.destroy({
+          where: { professor_id: professorId }
+        });
+        console.log(`Deleted ${deleted} existing course assignments`);
+      } catch (deleteError) {
+        console.error('Error deleting professor course assignments:', deleteError);
+        // Continue processing - don't throw the error
+      }
       
       // Create new course assignments with specific semesters
+      let assignmentCount = 0;
       for (let i = 0; i < course_ids.length; i++) {
         const courseId = course_ids[i];
         const semestersForCourse = course_semesters[courseId] || [];
         
-        for (const semester of semestersForCourse) {
-          // Check if this course-semester is already assigned to another professor
-          const isAlreadyAssigned = await isCourseSemesterAlreadyAssigned(courseId, semester, professorId);
+        console.log(`Processing course ${courseId} with semesters:`, semestersForCourse);
+        
+        // Ensure semestersForCourse is treated as an array
+        const semesterArray = Array.isArray(semestersForCourse) ? semestersForCourse : [semestersForCourse];
+        
+        for (const semester of semesterArray) {
+          console.log(`Creating assignment for professor ${professorId}, course ${courseId}, semester ${semester}`);
           
-          if (isAlreadyAssigned) {
-            console.log(`Course ${courseId} for semester ${semester} is already assigned to another professor. Skipping.`);
-            continue;
+          try {
+            await ProfessorCourse.create({
+              professor_course_id: `PC-${Math.random().toString(36).substring(2, 10)}`,
+              professor_id: professorId,
+              course_id: courseId,
+              semester: semester,
+              created_at: new Date(),
+              updated_at: new Date()
+            });
+            assignmentCount++;
+          } catch (createError) {
+            console.error(`Error creating assignment for course ${courseId}, semester ${semester}:`, createError);
           }
-          
-          await ProfessorCourse.create({
-            professor_course_id: `PC-${uuidv4().substring(0, 8)}`,
-            professor_id: professorId,
-            course_id: courseId,
-            semester: semester,
-            created_at: new Date(),
-            updated_at: new Date()
-          });
         }
       }
+      
+      console.log(`Created ${assignmentCount} new course assignments`);
     }
     
     // Return updated professor

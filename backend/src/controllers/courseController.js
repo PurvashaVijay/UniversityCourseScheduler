@@ -209,20 +209,20 @@ exports.getCourseWithSemesters = async (req, res) => {
 exports.getCourseProfessorAssignments = async (req, res) => {
   try {
     const courseId = req.params.id;
+    console.log(`Getting professor assignments for course: ${courseId}`);
     
-    // Get the course with its semesters
+    // First, verify the course exists
     const course = await Course.findByPk(courseId);
-    
     if (!course) {
       return res.status(404).json({ message: 'Course not found' });
     }
     
-    // Get course semesters
+    // Get available semesters from CourseSemester
     const courseSemesters = await CourseSemester.findAll({
       where: { course_id: courseId }
     });
     
-    // Get professor assignments for this course
+    // Get professor assignments from ProfessorCourse with professor information
     const professorAssignments = await ProfessorCourse.findAll({
       where: { course_id: courseId },
       include: [
@@ -230,21 +230,31 @@ exports.getCourseProfessorAssignments = async (req, res) => {
       ]
     });
     
-    // Format the response
-    const response = {
-      course_id: courseId,
-      available_semesters: courseSemesters.map(sem => sem.semester),
-      assigned_professors: professorAssignments.map(assignment => ({
+    // Process the assignments, adding null checking to prevent errors
+    const assignedProfessors = professorAssignments.map(assignment => {
+      // Add null check here to prevent the error
+      const professor = assignment.professor || {};
+      return {
         professor_id: assignment.professor_id,
-        professor_name: `${assignment.Professor.first_name} ${assignment.Professor.last_name}`,
-        semester: assignment.semester
-      }))
-    };
+        professor_name: professor.first_name && professor.last_name ? 
+          `${professor.first_name} ${professor.last_name}` : 
+          'Unknown Professor',
+        semester: assignment.semester || 'Unknown Semester'
+      };
+    });
     
-    return res.status(200).json(response);
+    // Return the combined data
+    return res.status(200).json({
+      available_semesters: courseSemesters.map(s => s.semester),
+      assigned_professors: assignedProfessors
+    });
+    
   } catch (error) {
-    console.error('Error getting course-professor assignments:', error);
-    return res.status(500).json({ message: 'Failed to get course-professor assignments' });
+    console.error(`Error getting course-professor assignments for ${req.params.id}:`, error);
+    return res.status(500).json({ 
+      message: 'Failed to get course professor assignments',
+      error: error.message
+    });
   }
 };
 // Get courses by program - enhanced for num_classes and semesters
