@@ -20,6 +20,8 @@ const router = express.Router();
 // Public or authenticated-only routes
 router.get('/', authenticate, scheduleController.getAllSchedules);
 router.get('/:id', authenticate, scheduleController.getScheduleById);
+// Add this route if it doesn't exist or update it
+router.get('/:scheduleId/courses', authenticate, scheduleController.getScheduledCourses);
 
 // Admin-only routes
 router.post('/', authenticate, authorize('admin'), scheduleController.createSchedule);
@@ -28,8 +30,7 @@ router.delete('/:id', authenticate, authorize('admin'), scheduleController.delet
 
 
 // Add these routes to scheduleRoutes.js
-router.get('/:id/program/:programId', authenticate, scheduleController.getScheduleByProgram);
-router.get('/:id/department/:departmentId', authenticate, scheduleController.getScheduleByDepartment);
+
 // Additional routes
 router.get('/semester/:semesterId', authenticate, scheduleController.getSchedulesBySemester);
 // Add this route before the '/:id' route to avoid path conflicts

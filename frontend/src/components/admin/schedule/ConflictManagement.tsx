@@ -444,14 +444,7 @@ if (selectedDay && selectedCourseToMove) {
   // Check if hasNoCompatibleSlots is calculated correctly
   console.log('Has no compatible slots?', filtered.length === 0);
 }
-
-
-
-
-
-
-
-                          
+                 
                           if (timeSlotInfo) {
                             return (
                               <>

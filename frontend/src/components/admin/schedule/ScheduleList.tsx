@@ -61,15 +61,11 @@ semester_id: string;
 name: string;
 }
 
-interface Department {
-department_id: string;
-name: string;
-}
 
 interface Program {
 program_id: string;
 name: string;
-department_id: string;
+
 }
 
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
@@ -81,13 +77,9 @@ selectedScheduleId?: string;
 forceRefresh?: number; // A counter that when incremented will force a refresh
 onScheduleDeleted?: () => void; // Callback for when a schedule is deleted
 onScheduleSelected?: (scheduleId: string) => void; // Callback for when a schedule is selected
-departments?: Department[];
 programs?: Program[];
-selectedDepartment?: string;
 selectedProgram?: string;
-loadingDepartments?: boolean;
 loadingPrograms?: boolean;
-onDepartmentChange?: (event: SelectChangeEvent) => void;
 onProgramChange?: (event: SelectChangeEvent) => void;
 }
 
@@ -96,13 +88,9 @@ selectedScheduleId,
 forceRefresh = 0,
 onScheduleDeleted,
 onScheduleSelected,
-departments = [],
 programs = [],
-selectedDepartment = '',
 selectedProgram = '',
-loadingDepartments = false,
 loadingPrograms = false,
-onDepartmentChange,
 onProgramChange
 }) => {
 // Define refreshCounter state variable
@@ -174,14 +162,12 @@ useEffect(() => {
     try {
       setLoading(true);
       console.log('Fetching schedules for semester:', selectedSemester);
-      console.log('Selected department:', selectedDepartment);
       console.log('Selected program:', selectedProgram);
       console.log('ForceRefresh value:', forceRefresh);
       
       // Pass department and program IDs to the service call
       const data = await scheduleService.getSchedulesBySemester(
         selectedSemester,
-        selectedDepartment || undefined,
         selectedProgram || undefined
       );
       
@@ -218,13 +204,12 @@ useEffect(() => {
   
   console.log('Schedules useEffect triggered');
   console.log('Selected semester:', selectedSemester);
-  console.log('Selected department:', selectedDepartment);
   console.log('Selected program:', selectedProgram);
   console.log('Selected schedule ID from props:', selectedScheduleId);
   console.log('ForceRefresh value:', forceRefresh);
   
   fetchData();
-}, [selectedSemester, selectedDepartment, selectedProgram, selectedScheduleId, forceRefresh, onScheduleSelected]);
+}, [selectedSemester, selectedProgram, selectedScheduleId, forceRefresh, onScheduleSelected]);
 
 // Auto-select the first schedule when there's only one and notify parent
 useEffect(() => {
@@ -254,31 +239,38 @@ fetchTimeSlots();
 }, []);
 
 // Load scheduled courses for selected schedule
+// Load scheduled courses for selected schedule with program filtering
+// Load scheduled courses for selected schedule
 useEffect(() => {
-const fetchScheduledCourses = async () => {
-if (!selectedSchedule) return;
+  const fetchScheduledCourses = async () => {
+    if (!selectedSchedule) return;
+    try {
+      setLoadingCourses(true);
+      console.log('Fetching scheduled courses for schedule:', selectedSchedule);
+      console.log('Using program filter:', selectedProgram || 'none');
+      
+      // Pass the program ID to filter courses
+      const data = await scheduleService.getScheduledCourses(
+        selectedSchedule,
+        selectedProgram || undefined
+      );
+      
+      console.log('Fetched scheduled courses:', data.length);
+      setScheduledCourses(data);
+    } catch (error) {
+      console.error('Error fetching scheduled courses:', error);
+      setSnackbar({
+        open: true,
+        message: 'Failed to load scheduled courses',
+        severity: 'error'
+      });
+    } finally {
+      setLoadingCourses(false);
+    }
+  };
 
-try {
-setLoadingCourses(true);
-console.log('Fetching scheduled courses for schedule:', selectedSchedule);
-
-const data = await scheduleService.getScheduledCourses(selectedSchedule);
-console.log('Fetched scheduled courses:', data.length);
-setScheduledCourses(data);
-} catch (error) {
-console.error('Error fetching scheduled courses:', error);
-setSnackbar({
-open: true,
-message: 'Failed to load scheduled courses',
-severity: 'error'
-});
-} finally {
-setLoadingCourses(false);
-}
-};
-fetchScheduledCourses();
-}, [selectedSchedule]);
-
+  fetchScheduledCourses();
+}, [selectedSchedule, selectedProgram]); // Add selectedProgram to dependency array
 // Fixed the type for event parameter
 const handleSemesterChange = (event: SelectChangeEvent) => {
 setSelectedSemester(event.target.value);
@@ -690,44 +682,28 @@ Course Schedule
 </Typography>
 
 <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
-{/* Department dropdown */}
-<FormControl fullWidth sx={{ flex: 1 }}>
-<InputLabel id="department-select-label">Department</InputLabel>
-<Select
-labelId="department-select-label"
-id="department-select"
-value={selectedDepartment}
-label="Department"
-onChange={onDepartmentChange}
-disabled={loadingDepartments}
->
-<MenuItem value="">All Departments</MenuItem>
-{departments.map((department) => (
-<MenuItem key={department.department_id} value={department.department_id}>
-{department.name}
-</MenuItem>
-))}
-</Select>
-</FormControl>
 
 {/* Program dropdown - only enabled when department is selected */}
-<FormControl fullWidth sx={{ flex: 1 }} disabled={!selectedDepartment || loadingPrograms}>
-<InputLabel id="program-select-label">Program</InputLabel>
-<Select
-labelId="program-select-label"
-id="program-select"
-value={selectedProgram}
-label="Program"
-onChange={onProgramChange}
->
-<MenuItem value="">All Programs</MenuItem>
-{programs.map((program) => (
-<MenuItem key={program.program_id} value={program.program_id}>
-{program.name}
-</MenuItem>
-))}
-</Select>
+<Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
+<FormControl fullWidth sx={{ flex: 1, minWidth: '200px' }}>
+  <InputLabel id="program-select-label">Program</InputLabel>
+  <Select
+    labelId="program-select-label"
+    id="program-select"
+    value={selectedProgram}
+    label="Program"
+    onChange={onProgramChange}
+    disabled={loadingPrograms}
+  >
+    <MenuItem value="" style={{ color: '#000000' }}>All Programs</MenuItem>
+    {programs.map((program) => (
+      <MenuItem key={program.program_id} value={program.program_id}>
+        {program.name}
+      </MenuItem>
+    ))}
+  </Select>
 </FormControl>
+</Box>
 </Box>
 
 <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' }, mt: 2 }}>
