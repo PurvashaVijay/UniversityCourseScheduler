@@ -1,56 +1,61 @@
-#!/usr/bin/env python3
 """
-Scheduler Interface - A simple script to run the course scheduler
-This script is called by the Node.js backend
+Interface script to run the CourseScheduler from Node.js
+
+This script:
+1. Reads JSON input from stdin
+2. Runs the CourseScheduler with the input data
+3. Returns the schedule or error as JSON to stdout
 """
-import json
+
 import sys
+import json
 import traceback
+# Redirect library loading messages to stderr
+class StderrRedirector:
+    def __init__(self, stderr):
+        self.stderr = stderr
+    
+    def write(self, message):
+        if message.startswith('load '):
+            self.stderr.write(message)
+        else:
+            sys.__stdout__.write(message)
+    
+    def flush(self):
+        self.stderr.flush()
+
+# Replace standard output temporarily
+sys.stdout = StderrRedirector(sys.stderr)
+
 from course_scheduler import CourseScheduler
 
-def run_scheduler(input_json):
-    """Run the scheduler with the given input JSON"""
+def main():
     try:
-        # Parse the input data
-        print(f"Received data of length: {len(input_json)}", file=sys.stderr)
+        # Reset stdout for normal output
+        sys.stdout = sys.__stdout__
+        
+        # Read JSON input from stdin
+        input_json = sys.stdin.read()
         data = json.loads(input_json)
-
-        # Log input data summary for debugging
-        print(f"Processing schedule for ID: {data.get('scheduleId')}", file=sys.stderr)
-        print(f"Data contains: {len(data.get('courses', []))} courses, " + 
-            f"{len(data.get('professors', []))} professors, " +
-            f"{len(data.get('timeSlots', []))} time slots", file=sys.stderr)
         
-        # Initialize the scheduler
+        # Initialize and run the scheduler
         scheduler = CourseScheduler(data)
+        result = scheduler.solve()
         
-        # Build and solve the model
-        scheduler.build_model()
-        solution = scheduler.solve()
+        # Return JSON result to stdout
+        print(json.dumps(result))
         
-        # Return the solution as JSON
-        result = {
-            "success": True,
-            "result": solution
-        }
-        return json.dumps(result)
     except Exception as e:
-        # Capture and return any errors
-        error_traceback = traceback.format_exc()
-        print(f"Error in scheduler: {str(e)}", file=sys.stderr)
-        print(error_traceback, file=sys.stderr)
-        return json.dumps({
+        # Reset stdout if it wasn't already
+        sys.stdout = sys.__stdout__
+        
+        # Return error as JSON
+        error_result = {
             "success": False,
             "error": str(e),
-            "traceback": error_traceback
-        })
+            "traceback": traceback.format_exc()
+        }
+        print(json.dumps(error_result))
 
 if __name__ == "__main__":
-    # Read input from stdin (for Node.js to pipe data in)
-    input_json = sys.stdin.read()
-    
-    # Run the scheduler
-    output_json = run_scheduler(input_json)
-    
-    # Output the result to stdout (for Node.js to capture)
-    print(output_json)
+    main()
