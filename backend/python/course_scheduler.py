@@ -228,6 +228,12 @@ class CourseScheduler:
             day_counts[day] = self.model.NewIntVar(0, len(self.courses) * 3, f"count_{day}")
             self.model.Add(day_counts[day] == sum(day_course_vars))
 
+        # Add day pattern constraints for multi-class courses
+        self._add_multi_class_day_patterns()
+
+        # Add time slot consistency constraints for multi-class courses
+        self._add_time_slot_consistency()
+
         # Try to enforce minimum courses per day (at least 2-3 courses per day)
         min_per_day = max(2, len(self.courses) // len(valid_days) - 1)
         for day in valid_days:
@@ -266,6 +272,26 @@ class CourseScheduler:
         for course_instance_id, scheduled_var in self.course_scheduled_vars.items():
             total_scheduled.append(scheduled_var)
         self.model.Add(sum(total_scheduled) >= min_courses)
+
+        # Link day variables to time slot variables
+        for course_instance_id in self.course_scheduled_vars:
+            for day in ["Monday", "Tuesday", "Wednesday", "Thursday"]:
+                if day in self.course_day_vars.get(course_instance_id, {}):
+                    day_var = self.course_day_vars[course_instance_id][day]
+                    
+                    # Get all time slots for this day
+                    day_slots = []
+                    for slot_id, slot_var in self.course_timeslot_vars.get(course_instance_id, {}).items():
+                        time_slot = self.time_slot_dict.get(slot_id)
+                        if time_slot and time_slot['day_of_week'] == day:
+                            day_slots.append(slot_var)
+                    
+                    if day_slots:
+                        # If this day is chosen, exactly one of its time slots must be chosen
+                        self.model.Add(sum(day_slots) == day_var)
+                    else:
+                        # If no time slots for this day, it can't be chosen
+                        self.model.Add(day_var == 0)
     
     def _create_variables(self):
         """Create all decision variables for the model"""
@@ -371,7 +397,156 @@ class CourseScheduler:
                     if not is_available:
                         self.model.Add(prof_var + slot_var <= 1)
     
-    
+    def _add_multi_class_day_patterns(self):
+        """Enforce specific day patterns for courses with multiple instances"""
+        # Group course instances by their base course_id
+        course_instances = {}
+        for course_instance_id in self.course_scheduled_vars:
+            course_id = course_instance_id.split('_')[0]
+            instance = int(course_instance_id.split('_')[1])
+            
+            if course_id not in course_instances:
+                course_instances[course_id] = []
+            course_instances[course_id].append((course_instance_id, instance))
+        
+        # For each course with multiple instances
+        for course_id, instances in course_instances.items():
+            if len(instances) <= 1:
+                continue
+                
+            # Sort instances by number
+            instances.sort(key=lambda x: x[1])
+            num_classes = len(instances)
+            
+            # Define valid day patterns
+            valid_day_patterns = []
+            if num_classes == 2:
+                valid_day_patterns = [
+                    ["Monday", "Wednesday"],
+                    ["Tuesday", "Thursday"]
+                ]
+            elif num_classes == 3:
+                valid_day_patterns = [
+                    ["Monday", "Wednesday", "Thursday"]
+                ]
+            else:
+                continue  # Skip if not 2 or 3 instances
+            
+            # Create variables for each valid pattern
+            pattern_vars = []
+            for pattern_idx, pattern in enumerate(valid_day_patterns):
+                # Create a variable that is 1 if this pattern is chosen
+                pattern_var = self.model.NewBoolVar(f"pattern_{course_id}_{pattern_idx}")
+                pattern_vars.append(pattern_var)
+                
+                # For each day in the pattern
+                for i, day in enumerate(pattern):
+                    # Get the instance for this position
+                    if i < len(instances):
+                        instance_id = instances[i][0]
+                        
+                        # For this instance, create implications for each day
+                        for check_day in ["Monday", "Tuesday", "Wednesday", "Thursday"]:
+                            # Skip if day not in course_day_vars
+                            if check_day not in self.course_day_vars.get(instance_id, {}):
+                                continue
+                                
+                            day_var = self.course_day_vars[instance_id][check_day]
+                            
+                            # If pattern is chosen, this instance must be on the correct day
+                            if check_day == day:
+                                self.model.AddImplication(pattern_var, day_var)
+                            else:
+                                # If pattern is chosen, this instance cannot be on other days
+                                self.model.AddImplication(pattern_var, day_var.Not())
+            
+            # Exactly one pattern must be chosen if course is scheduled
+            if pattern_vars:
+                first_instance_id = instances[0][0]
+                scheduled_var = self.course_scheduled_vars[first_instance_id]
+                
+                # If any instance is scheduled, a pattern must be chosen
+                self.model.Add(sum(pattern_vars) == scheduled_var)
+                
+                # Ensure all instances of a course have the same scheduled status
+                for i in range(1, len(instances)):
+                    instance_id = instances[i][0]
+                    self.model.Add(self.course_scheduled_vars[instance_id] == scheduled_var)
+
+    def _add_time_slot_consistency(self):
+        """Ensure all instances of a course use the same time slot number"""
+        # Group time slots by their number
+        time_slot_groups = {}
+        for slot_id, slot in self.time_slot_dict.items():
+            # Extract the time slot number (TS1, TS2, etc.)
+            slot_num = slot_id.split('-')[0]
+            if slot_num not in time_slot_groups:
+                time_slot_groups[slot_num] = []
+            time_slot_groups[slot_num].append(slot_id)
+        
+        # Group course instances by their base course_id
+        course_instances = {}
+        for course_instance_id in self.course_scheduled_vars:
+            course_id = course_instance_id.split('_')[0]
+            instance = int(course_instance_id.split('_')[1])
+            
+            if course_id not in course_instances:
+                course_instances[course_id] = []
+            course_instances[course_id].append((course_instance_id, instance))
+        
+        # For each course with multiple instances
+        for course_id, instances in course_instances.items():
+            if len(instances) <= 1:
+                continue
+            
+            # Create variables for each time slot number
+            slot_num_vars = {}
+            for slot_num in time_slot_groups:
+                slot_num_var = self.model.NewBoolVar(f"course_{course_id}_slot_num_{slot_num}")
+                slot_num_vars[slot_num] = slot_num_var
+                
+                # For each instance of this course
+                for instance_id, _ in instances:
+                    # Get the slot variables for this time slot number
+                    instance_slot_vars = []
+                    for slot_id in time_slot_groups[slot_num]:
+                        if slot_id in self.course_timeslot_vars.get(instance_id, {}):
+                            instance_slot_vars.append(self.course_timeslot_vars[instance_id][slot_id])
+                    
+                    if instance_slot_vars:
+                        # Get the scheduled variable for this instance
+                        scheduled_var = self.course_scheduled_vars[instance_id]
+                        
+                        # Create a variable that is 1 if both slot_num_var and scheduled_var are 1
+                        slot_scheduled_var = self.model.NewBoolVar(f"slot_{slot_num}_scheduled_{instance_id}")
+                        self.model.AddBoolAnd([slot_num_var, scheduled_var]).OnlyEnforceIf(slot_scheduled_var)
+                        self.model.AddBoolOr([slot_num_var.Not(), scheduled_var.Not()]).OnlyEnforceIf(slot_scheduled_var.Not())
+                        
+                        # If slot_scheduled_var is 1, exactly one of the instance_slot_vars must be 1
+                        # If slot_scheduled_var is 0, all of the instance_slot_vars must be 0
+                        self.model.Add(sum(instance_slot_vars) == slot_scheduled_var)
+                        
+                        # Additionally, if the course is scheduled but this slot number is not chosen,
+                        # then none of the time slots in this group can be chosen
+                        not_this_slot_but_scheduled = self.model.NewBoolVar(f"not_slot_{slot_num}_but_scheduled_{instance_id}")
+                        self.model.AddBoolAnd([slot_num_var.Not(), scheduled_var]).OnlyEnforceIf(not_this_slot_but_scheduled)
+                        self.model.AddBoolOr([slot_num_var, scheduled_var.Not()]).OnlyEnforceIf(not_this_slot_but_scheduled.Not())
+                        
+                        # If not_this_slot_but_scheduled is 1, all instance_slot_vars must be 0
+                        for var in instance_slot_vars:
+                            self.model.AddImplication(not_this_slot_but_scheduled, var.Not())
+            
+            # Ensure all instances of a course have the same scheduled status
+            first_instance_scheduled = self.course_scheduled_vars[instances[0][0]]
+            for i in range(1, len(instances)):
+                instance_id = instances[i][0]
+                self.model.Add(self.course_scheduled_vars[instance_id] == first_instance_scheduled)
+            
+            # If the course is scheduled, exactly one time slot number must be chosen
+            if slot_num_vars:
+                first_instance_scheduled = self.course_scheduled_vars[instances[0][0]]
+                self.model.Add(sum(slot_num_vars.values()) == first_instance_scheduled)
+
     def _add_professor_conflict_constraints(self):
         """Prevent professors from teaching multiple courses at the same time"""
         # Group course instances by time slot
@@ -494,7 +669,7 @@ class CourseScheduler:
                     ]
                 elif num_classes == 3:
                     valid_patterns = [
-                        ["Monday", "Tuesday", "Thursday"]
+                        ["Monday", "Wednesday", "Thursday"]
                     ]
                 
                 # Enforce valid day patterns
