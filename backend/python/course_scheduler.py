@@ -76,10 +76,13 @@ class CourseScheduler:
         start_time = time.time()
         
         # Create decision variables with Friday filtering
-        self._create_simple_variables()
+        self._create_sequential_scanning_variables()
         
         # Add essential constraints that FORCE courses to be scheduled
         self._add_essential_constraints()
+
+        # Calculate time slot scarcity for each duration
+        self._add_timeslot_scarcity_penalty()
         
         # Define objective function
         self._add_simple_objective(self.model)
@@ -127,23 +130,33 @@ class CourseScheduler:
                 self.course_timeslot_vars[instance_id] = {}
                 self.course_day_vars[instance_id] = {}
                 
-                # Time slot variables - filter out Friday slots
+                # Time slot variables - filter out Friday slots and ensure exact duration matching
                 for time_slot in self.time_slots:
                     # Skip Friday time slots
                     if time_slot['day_of_week'].lower() == 'friday':
                         continue
                         
+                    # Only create variables for time slots with exactly matching duration
                     slot_id = time_slot['timeslot_id']
-                    self.course_timeslot_vars[instance_id][slot_id] = self.model.NewBoolVar(
-                        f"course_{instance_id}_slot_{slot_id}"
-                    )
+                    course_duration = self.course_dict[course_id.split('_')[0]]['duration_minutes']
+                    slot_duration = time_slot['duration_minutes']
                     
-                    # Record day variables for convenience
-                    day = time_slot['day_of_week']
-                    if day not in self.course_day_vars[instance_id]:
-                        self.course_day_vars[instance_id][day] = self.model.NewBoolVar(
-                            f"course_{instance_id}_day_{day}"
+                    # Only create variable if durations match exactly
+                    if course_duration == slot_duration:
+                        self.course_timeslot_vars[instance_id][slot_id] = self.model.NewBoolVar(
+                            f"course_{instance_id}_slot_{slot_id}"
                         )
+                        
+                        # Record day variables for convenience
+                        day = time_slot['day_of_week']
+                        if day not in self.course_day_vars[instance_id]:
+                            self.course_day_vars[instance_id][day] = self.model.NewBoolVar(
+                                f"course_{instance_id}_day_{day}"
+                            )
+                
+                # Add after the time slot variable creation loop:
+                if not self.course_timeslot_vars[instance_id]:
+                    print(f"WARNING: Course {course_id} (duration: {course_duration} min) has no time slots with exact matching duration")
 
     def _add_essential_constraints(self):
         """Add the most essential constraints plus distribution constraints"""
@@ -227,6 +240,9 @@ class CourseScheduler:
             # Variable representing number of courses on this day
             day_counts[day] = self.model.NewIntVar(0, len(self.courses) * 3, f"count_{day}")
             self.model.Add(day_counts[day] == sum(day_course_vars))
+
+        # Add time slot load balancing
+        self._add_time_slot_load_balancing()
 
         # Add day pattern constraints for multi-class courses
         self._add_multi_class_day_patterns()
@@ -361,6 +377,85 @@ class CourseScheduler:
                 max_courses_per_slot = min(3, max(2, len(self.courses) // (len(self.time_slots) * 2)))
                 self.model.Add(sum(course_vars) <= max_courses_per_slot)
 
+    def _create_sequential_scanning_variables(self):
+        """Create decision variables with sequential scanning and smart duration matching"""
+        # Group time slots by day and sort by start time
+        sorted_time_slots_by_day = {}
+        for day in ["Monday", "Tuesday", "Wednesday", "Thursday"]:
+            day_slots = self.time_slots_by_day.get(day, [])
+            sorted_time_slots_by_day[day] = sorted(day_slots, key=lambda ts: ts['start_time'])
+        
+        # Debug: Print all available time slot durations
+        available_durations = set(slot['duration_minutes'] for slot in self.time_slots)
+        print(f"Available time slot durations: {sorted(available_durations)}")
+        
+        # Create a list of all time slots for systematic processing
+        all_time_slots = []
+        for day in ["Monday", "Tuesday", "Wednesday", "Thursday"]:
+            for slot in sorted_time_slots_by_day[day]:
+                all_time_slots.append(slot)
+        
+        # Sort time slots to ensure consistent processing - first by day, then by start time
+        all_time_slots.sort(key=lambda ts: (["Monday", "Tuesday", "Wednesday", "Thursday"].index(ts['day_of_week']), ts['start_time']))
+        
+        # For each course and number of classes
+        for course in self.courses:
+            course_id = course['course_id']
+            num_classes = course.get('num_classes', 1)
+            course_duration = course['duration_minutes']
+            
+            # Debug: Print course duration
+            print(f"Course {course_id} requires duration: {course_duration}")
+            
+            # Find matching time slots for this course
+            matching_slots = [slot for slot in all_time_slots if slot['duration_minutes'] == course_duration]
+            
+            if not matching_slots:
+                print(f"WARNING: No exact matching time slots for course {course_id} (duration: {course_duration})")
+                # If no exact matches, try using all non-Friday slots as fallback
+                matching_slots = [slot for slot in all_time_slots if slot['day_of_week'].lower() != 'friday']
+            
+            # Create variables for each class instance
+            for instance in range(1, num_classes + 1):
+                instance_id = f"{course_id}_{instance}"
+                
+                # Boolean variable to track if this course instance is scheduled
+                self.course_scheduled_vars[instance_id] = self.model.NewBoolVar(f"scheduled_{instance_id}")
+                
+                # Create professor assignment variables
+                self.course_professor_vars[instance_id] = {}
+                for professor in self.professors:
+                    prof_id = professor['professor_id']
+                    # Only create variable if professor can teach this course
+                    if self._can_professor_teach_course(prof_id, course_id):
+                        self.course_professor_vars[instance_id][prof_id] = self.model.NewBoolVar(
+                            f"course_{instance_id}_prof_{prof_id}"
+                        )
+                
+                # Create time slot assignment variables
+                self.course_timeslot_vars[instance_id] = {}
+                self.course_day_vars[instance_id] = {}
+                
+                # Process each matching time slot for this course
+                for time_slot in matching_slots:
+                    slot_id = time_slot['timeslot_id']
+                    day = time_slot['day_of_week']
+                    
+                    # Skip Friday slots
+                    if day.lower() == 'friday':
+                        continue
+                    
+                    # Create the time slot variable
+                    self.course_timeslot_vars[instance_id][slot_id] = self.model.NewBoolVar(
+                        f"course_{instance_id}_slot_{slot_id}"
+                    )
+                    
+                    # Record day variables for convenience
+                    if day not in self.course_day_vars[instance_id]:
+                        self.course_day_vars[instance_id][day] = self.model.NewBoolVar(
+                            f"course_{instance_id}_day_{day}"
+                        )
+
     def _add_professor_qualification_constraints(self):
         """Ensure professors are only assigned to courses they can teach"""
         for course_instance_id, prof_vars in self.course_professor_vars.items():
@@ -379,6 +474,68 @@ class CourseScheduler:
             else:
                 # If no qualified professors, course can't be scheduled
                 self.model.Add(scheduled_var == 0)
+
+    def _add_timeslot_scarcity_penalty(self):
+        """Add penalties for using scarce time slots that match certain durations"""
+        # Count how many courses require each duration
+        duration_demand = {}
+        for course in self.courses:
+            duration = course['duration_minutes']
+            duration_demand[duration] = duration_demand.get(duration, 0) + 1
+        
+        # Count how many time slots are available for each duration
+        duration_supply = {}
+        for slot in self.time_slots:
+            if slot['day_of_week'].lower() != 'friday':  # Skip Friday
+                duration = slot['duration_minutes']
+                duration_supply[duration] = duration_supply.get(duration, 0) + 1
+        
+        # Calculate scarcity for each duration
+        duration_scarcity = {}
+        for duration, demand in duration_demand.items():
+            supply = duration_supply.get(duration, 0)
+            if supply > 0:
+                # Higher value means more scarce
+                duration_scarcity[duration] = min(3.0, demand / supply)
+            else:
+                duration_scarcity[duration] = 3.0  # Maximum scarcity
+        
+        # Store scarcity information for the objective function
+        self.duration_scarcity = duration_scarcity
+
+    def _add_time_slot_load_balancing(self):
+        """Add constraints to track and balance the load across time slots"""
+        # Create variables to track courses per time slot
+        self.courses_per_timeslot = {}
+        self.max_courses_per_timeslot = self.model.NewIntVar(0, 3, "max_courses_per_timeslot")
+        
+        # For each valid time slot (excluding Friday)
+        for day in ["Monday", "Tuesday", "Wednesday", "Thursday"]:
+            for time_slot in self.time_slots_by_day.get(day, []):
+                slot_id = time_slot['timeslot_id']
+                slot_key = f"{day}_{slot_id}"
+                
+                # Get all course variables that could be assigned to this time slot
+                course_vars = []
+                for course_instance_id, slot_vars in self.course_timeslot_vars.items():
+                    if slot_id in slot_vars:
+                        course_vars.append(slot_vars[slot_id])
+                
+                # Create a variable to track how many courses are assigned to this slot
+                max_courses = min(len(course_vars), 3)  # At most 3 courses per slot
+                self.courses_per_timeslot[slot_key] = self.model.NewIntVar(
+                    0, max_courses, f"courses_at_{slot_key}"
+                )
+                
+                # Set this variable equal to the sum of course variables
+                self.model.Add(self.courses_per_timeslot[slot_key] == sum(course_vars))
+                
+                # Update max_courses_per_timeslot to be the maximum across all slots
+                self.model.Add(self.max_courses_per_timeslot >= self.courses_per_timeslot[slot_key])
+        
+        # Add a constraint to limit maximum courses per timeslot to 2
+        # This forces better distribution across available slots
+        self.model.Add(self.max_courses_per_timeslot <= 2)
 
     
     def _add_professor_availability_constraints(self):
@@ -1004,7 +1161,14 @@ class CourseScheduler:
                 # Create NO_AVAILABLE_SLOT conflict for each unscheduled instance
                 for instance in range(scheduled_instances + 1, num_classes + 1):
                     instance_id = f"{course_id}_{instance}"
-                    
+
+                    # Find a qualified professor for this course
+                    qualified_prof = None
+                    for prof in self.professors:
+                        if self._can_professor_teach_course(prof['professor_id'], course_id):
+                            qualified_prof = prof['professor_id']
+                            break
+
                     result["result"]["conflicts"].append({
                         "conflict": {
                             "conflict_id": f"CONF-{conflict_id:08d}",
@@ -1019,9 +1183,9 @@ class CourseScheduler:
                             "scheduled_course_id": f"SC-{instance_id}",
                             "schedule_id": self.schedule_id,
                             "course_id": course_id,
-                            "professor_id": None,
-                            "timeslot_id": None,
-                            "day_of_week": None,
+                            "professor_id": qualified_prof if qualified_prof else "UNASSIGNED",  # Default value
+                            "timeslot_id": "TS1-MON",   # Default value
+                            "day_of_week": "Monday",    # Default value
                             "is_override": False,
                             "class_instance": instance,
                             "num_classes": num_classes
@@ -1032,7 +1196,7 @@ class CourseScheduler:
                             "scheduled_course_id": f"SC-{instance_id}"
                         }
                     })
-                    
+                                        
                     conflict_id += 1
         
         # Update statistics
@@ -1058,7 +1222,7 @@ class CourseScheduler:
     def _add_simple_objective(self, model):
         """Define an enhanced objective function that balances course scheduling with distribution"""
         objective_terms = []
-        
+
         # Maximize scheduled courses, with higher weight for core courses
         for course_instance_id, scheduled_var in self.course_scheduled_vars.items():
             course_id = course_instance_id.split('_')[0]
@@ -1072,6 +1236,23 @@ class CourseScheduler:
         if hasattr(self, 'day_imbalance'):
             # Higher weight to prioritize balanced days
             objective_terms.append(self.day_imbalance * -5)
+        
+        # Minimize the maximum number of courses per timeslot
+        # Add a stronger penalty for timeslot clustering
+        if hasattr(self, 'max_courses_per_timeslot'):
+            objective_terms.append(self.max_courses_per_timeslot * -8)
+        
+        # Add penalties for using scarce time slots
+        if hasattr(self, 'duration_scarcity'):
+            for course_instance_id, slot_vars in self.course_timeslot_vars.items():
+                course_id = course_instance_id.split('_')[0]
+                course_duration = self.course_dict[course_id]['duration_minutes']
+                scarcity = self.duration_scarcity.get(course_duration, 1.0)
+                
+                for slot_id, slot_var in slot_vars.items():
+                    # Multiply by scarcity to prioritize using less scarce time slots
+                    # Slight negative weight to discourage using scarce slots
+                    objective_terms.append(slot_var * -0.5 * scarcity)
         
         model.Maximize(sum(objective_terms))
         
