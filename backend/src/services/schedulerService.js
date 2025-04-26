@@ -247,7 +247,10 @@ async function callPythonScheduler(data) {
     // Spawn Python process
     //const pythonProcess = spawn('python3', [scriptPath]);
 
-    const pythonProcess = spawn('C:\\Python310\\python.exe', [scriptPath]);
+    //const pythonProcess = spawn('C:\\Python310\\python.exe', [scriptPath]);
+    //const pythonProcess = spawn('C:\\Program Files\\Python310\\python.exe', [scriptPath]);
+
+    const pythonProcess = spawn('python', [scriptPath]);
     
     let outputData = '';
     let errorData = '';

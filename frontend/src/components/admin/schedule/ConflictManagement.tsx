@@ -346,7 +346,6 @@ const getFilteredTimeSlots = (day: string, courseToMove: string) => {
     slot.day_of_week === day
   );
 };
-
   // Prepare filtered time slots based on selections
   const filteredTimeSlots = (selectedDay && selectedCourseToMove) 
     ? getFilteredTimeSlots(selectedDay, selectedCourseToMove) 
@@ -707,11 +706,21 @@ if (selectedDay && selectedCourseToMove) {
                       No compatible time slots available
                     </MenuItem>
                   ) : (
-                    filteredTimeSlots.map(slot => (
-                      <MenuItem key={slot.timeslot_id} value={slot.timeslot_id}>
-                        {slot.name} ({slot.start_time.substring(0, 5)} - {slot.end_time.substring(0, 5)})
-                      </MenuItem>
-                    ))
+                    filteredTimeSlots.map(slot => {
+                      // Determine duration based on slot name or number
+                      let duration = "55";
+                      if (slot.name.includes("4") || slot.name.includes("5")) {
+                        duration = "80";
+                      } else if (slot.name.includes("6") || slot.name.includes("7")) {
+                        duration = "180";
+                      }
+                      
+                      return (
+                        <MenuItem key={slot.timeslot_id} value={slot.timeslot_id}>
+                          {slot.name} ({slot.start_time.substring(0, 5)} - {slot.end_time.substring(0, 5)}) - {duration} mins
+                        </MenuItem>
+                      );
+                    })
                   )}
                 </Select>
                 {selectedDay && (

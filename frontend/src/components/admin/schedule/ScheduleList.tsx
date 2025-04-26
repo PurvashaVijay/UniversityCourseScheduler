@@ -41,6 +41,12 @@ import scheduleService, { ScheduledCourse, TimeSlot } from '../../../services/sc
 import semesterService from '../../../services/semesterService';
 import CourseChangeDialog from './CourseChangeDialog';
 
+import * as XLSX from 'xlsx';
+import UploadIcon from '@mui/icons-material/Upload';
+import jsPDF from 'jspdf';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+
+
 // Enhanced Schedule interface to include department_id and program_id
 interface Schedule {
 schedule_id: string;
@@ -298,6 +304,7 @@ const handleCloseSnackbar = () => {
 setSnackbar({ ...snackbar, open: false });
 };
 
+
 // Functions for course change dialog
 const handleCourseClick = (course: ScheduledCourse) => {
 setSelectedCourseForChange(course);
@@ -397,6 +404,329 @@ const getCoursesForTimeSlot = (timeslotId: string, day: string) => {
 return scheduledCourses.filter(
 course => course.timeslot_id === timeslotId && course.day_of_week === day
 );
+};
+
+// Add this function inside the ScheduleList component
+const handleExportToExcel = () => {
+  if (scheduledCourses.length === 0) {
+    setSnackbar({
+      open: true,
+      message: 'No courses to export',
+      severity: 'warning'
+    });
+    return;
+  }
+
+  try {
+    const wb = XLSX.utils.book_new();
+    
+    // Create single worksheet with days as columns
+    const data = [
+      ['Time Slot', ...DAYS_OF_WEEK] // Header row
+    ];
+    
+    // Get all time slots sorted by start time
+    const allTimeSlotsSorted = allTimeSlots
+      .filter((slot, index, self) => 
+        // Get unique time slot names
+        index === self.findIndex(s => s.name === slot.name)
+      )
+      .sort((a, b) => {
+        const timeA = new Date(`1970-01-01T${a.start_time}`).getTime();
+        const timeB = new Date(`1970-01-01T${b.start_time}`).getTime();
+        return timeA - timeB;
+      });
+    
+    // For each time slot, create a row
+    allTimeSlotsSorted.forEach(timeSlot => {
+      const row = [
+        `${timeSlot.name} (${timeSlot.start_time.substring(0, 5)} - ${timeSlot.end_time.substring(0, 5)})`
+      ];
+      
+      // For each day, get all courses for this time slot
+      DAYS_OF_WEEK.forEach(day => {
+        // Find all time slots with this name and day
+        const matchingSlots = allTimeSlots.filter(
+          slot => slot.name === timeSlot.name && slot.day_of_week === day
+        );
+        
+        // Get all courses for these slots
+        let courses: ScheduledCourse[] = [];
+        matchingSlots.forEach(slot => {
+          const slotsCoursesForDay = getCoursesForTimeSlot(slot.timeslot_id, day);
+          courses = [...courses, ...slotsCoursesForDay];
+        });
+        
+        // Create cell content with courses stacked
+        let cellContent = '';
+        courses.forEach((course, idx) => {
+          cellContent += `${course.course_id} - ${course.course?.course_name || 'Unnamed Course'}\n`;
+          cellContent += `Prof: ${course.professor?.first_name || ''} ${course.professor?.last_name || ''}\n`;
+          
+          // Add a blank line between courses (except after the last one)
+          if (idx < courses.length - 1) {
+            cellContent += '\n';
+          }
+        });
+        
+        row.push(cellContent);
+      });
+      
+      data.push(row);
+    });
+    
+    // Create worksheet
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    
+    // Set column widths
+    const colWidths = [
+      { wch: 25 }, // Time slot column
+      { wch: 30 }, // Monday column
+      { wch: 30 }, // Tuesday column
+      { wch: 30 }, // Wednesday column
+      { wch: 30 }, // Thursday column
+      { wch: 30 }  // Friday column
+    ];
+    
+    // Properly type the rowHeights object
+    const rowHeights: { [key: number]: { hpt: number } } = {};
+    data.forEach((_, idx) => {
+      // Skip header row
+      if (idx > 0) {
+        // Set row height to accommodate multiple courses
+        rowHeights[idx] = {
+          hpt: 120 // Height in points - adjust as needed
+        };
+      }
+    });
+    
+    ws['!cols'] = colWidths;
+    
+    // Add row heights (SheetJS format)
+    ws['!rows'] = [];
+    for (let i = 0; i < data.length; i++) {
+      ws['!rows'][i] = i in rowHeights ? rowHeights[i] : {};
+    }
+    
+    // Add worksheet to workbook
+    XLSX.utils.book_append_sheet(wb, ws, 'Schedule');
+    
+    // Get current schedule and semester info for filename
+    const currentSchedule = schedules.find(s => s.schedule_id === selectedSchedule);
+    const scheduleName = currentSchedule ? currentSchedule.name : 'schedule';
+    const semesterName = currentSchedule?.semester?.name || '';
+    
+    // Generate filename
+    const filename = `${semesterName} - ${scheduleName}.xlsx`;
+    
+    // Write and download file
+    XLSX.writeFile(wb, filename);
+    
+    setSnackbar({
+      open: true,
+      message: 'Schedule exported successfully',
+      severity: 'success'
+    });
+  } catch (error) {
+    console.error('Error exporting to Excel:', error);
+    setSnackbar({
+      open: true,
+      message: 'Failed to export schedule',
+      severity: 'error'
+    });
+  }
+};
+
+const handleExportToPdf = () => {
+  if (scheduledCourses.length === 0) {
+    setSnackbar({
+      open: true,
+      message: 'No courses to export',
+      severity: 'warning'
+    });
+    return;
+  }
+
+  try {
+    // Create new PDF document (landscape for better schedule viewing)
+    const doc = new jsPDF('landscape', 'mm', 'a4');
+    
+    // Get current schedule and semester info for title
+    const currentSchedule = schedules.find(s => s.schedule_id === selectedSchedule);
+    const scheduleName = currentSchedule ? currentSchedule.name : 'Schedule';
+    const semesterName = currentSchedule?.semester?.name || '';
+    
+    // Page width and height for reference
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    
+    // Function to add headers to a page
+    const addHeaders = (yPosition: number) => {
+      // Add table header with in-person label
+      doc.setFillColor(173, 216, 230); // Light blue
+      doc.setDrawColor(100, 100, 100); // Grey
+      doc.rect(14, yPosition, pageWidth - 28, 10, 'FD'); // FD = Fill and Draw
+      
+      doc.setFontSize(12);
+      doc.setTextColor(0, 0, 0);
+      doc.text('In-Person', pageWidth / 2, yPosition + 6, { align: 'center' });
+      
+      yPosition += 10;
+      
+      // Add day headers
+      doc.setFillColor(173, 216, 230);
+      doc.rect(14, yPosition, 40, 10, 'FD');
+      doc.text('Time', 14 + (40 / 2), yPosition + 6, { align: 'center' });
+      
+      const dayColWidth = (pageWidth - 28 - 40) / DAYS_OF_WEEK.length;
+      
+      for (let i = 0; i < DAYS_OF_WEEK.length; i++) {
+        const xPos = 14 + 40 + (i * dayColWidth);
+        doc.setFillColor(173, 216, 230);
+        doc.rect(xPos, yPosition, dayColWidth, 10, 'FD');
+        doc.text(DAYS_OF_WEEK[i], xPos + (dayColWidth / 2), yPosition + 6, { align: 'center' });
+      }
+      
+      return yPosition + 10; // Return the new y position
+    };
+    
+    // Define table dimensions
+    const margin = 14;
+    const tableWidth = pageWidth - (margin * 2);
+    const timeColWidth = 40;
+    const dayColWidth = (tableWidth - timeColWidth) / DAYS_OF_WEEK.length;
+    
+    // Add title
+    doc.setFontSize(16);
+    doc.text(`${semesterName} - ${scheduleName}`, margin, 15);
+    
+    // Start with headers
+    let yPos = 25;
+    yPos = addHeaders(yPos);
+    
+    // Process each time slot
+    for (let i = 0; i < getUniqueTimeSlots().length; i++) {
+      const timeSlot = getUniqueTimeSlots()[i];
+      
+      // Calculate row height based on maximum number of courses
+      let maxCourses = 0;
+      
+      for (let j = 0; j < DAYS_OF_WEEK.length; j++) {
+        const timeslotId = getTimeslotIdForTimeAndDay(
+          timeSlot.start_time,
+          timeSlot.end_time,
+          DAYS_OF_WEEK[j]
+        );
+        
+        if (timeslotId) {
+          const courses = getCoursesForTimeSlot(timeslotId, DAYS_OF_WEEK[j]);
+          maxCourses = Math.max(maxCourses, courses ? courses.length : 0);
+        }
+      }
+      
+      // Base height is 15mm plus 12mm per course
+      const rowHeight = Math.max(20, 15 + (maxCourses * 12));
+      
+      // Check if this row will fit on the current page
+      if (yPos + rowHeight > pageHeight - 20) {
+        doc.addPage();
+        yPos = 25;
+        yPos = addHeaders(yPos);
+      }
+      
+      // Time slot column with blue background
+      doc.setFillColor(220, 240, 250); // Lighter blue
+      doc.rect(margin, yPos, timeColWidth, rowHeight, 'FD');
+      
+      // Time slot text
+      doc.setFontSize(10);
+      doc.text(
+        `${timeSlot.start_time.substring(0, 5)} - ${timeSlot.end_time.substring(0, 5)}`,
+        margin + (timeColWidth / 2),
+        yPos + 10,
+        { align: 'center' }
+      );
+      
+      // For each day (column)
+      for (let j = 0; j < DAYS_OF_WEEK.length; j++) {
+        const day = DAYS_OF_WEEK[j];
+        const xPos = margin + timeColWidth + (j * dayColWidth);
+        
+        // Draw cell with border
+        doc.setFillColor(255, 255, 255); // White background
+        doc.rect(xPos, yPos, dayColWidth, rowHeight, 'FD');
+        
+        // Find time slot IDs for this day and time
+        const timeslotId = getTimeslotIdForTimeAndDay(
+          timeSlot.start_time,
+          timeSlot.end_time,
+          day
+        );
+        
+        // Get courses for this time slot and day
+        let courses: any[] = [];
+        if (timeslotId) {
+          courses = getCoursesForTimeSlot(timeslotId, day) || [];
+        }
+        
+        // Add course info
+        if (courses.length > 0) {
+          doc.setFontSize(8);
+          let courseYPos = yPos + 4; // Start text position
+          
+          for (let k = 0; k < courses.length; k++) {
+            const course = courses[k];
+            
+            // Course ID in bold
+            doc.setFont("helvetica", "bold");
+            doc.text(course.course_id, xPos + 2, courseYPos);
+            courseYPos += 3.5;
+            
+            // Course name with text wrapping
+            doc.setFont("helvetica", "normal");
+            const courseName = course.course?.course_name || 'Unnamed Course';
+            
+            // Split text to fit column width
+            const maxWidth = dayColWidth - 4;
+            const textLines = doc.splitTextToSize(courseName, maxWidth);
+            
+            // Add text line by line
+            for (let l = 0; l < textLines.length; l++) {
+              doc.text(textLines[l], xPos + 2, courseYPos);
+              courseYPos += 3.5;
+            }
+            
+            // Professor name
+            const profName = `${course.professor?.first_name || ''} ${course.professor?.last_name || ''}`;
+            doc.text(profName, xPos + 2, courseYPos);
+            
+            // Add more space between courses
+            courseYPos += 5;
+          }
+        }
+      }
+      
+      // Move to next row
+      yPos += rowHeight;
+    }
+    
+    // Generate filename and save
+    const filename = `${semesterName} - ${scheduleName}.pdf`;
+    doc.save(filename);
+    
+    setSnackbar({
+      open: true,
+      message: 'Schedule exported to PDF successfully',
+      severity: 'success'
+    });
+  } catch (error) {
+    console.error('Error exporting to PDF:', error);
+    setSnackbar({
+      open: true,
+      message: 'Failed to export schedule to PDF',
+      severity: 'error'
+    });
+  }
 };
 
 // Get all unique time slots across all days sorted by start time
@@ -784,31 +1114,55 @@ Day View
 </Box>
 
 <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-<Box>
-<Typography variant="body2" color="text.secondary">
-Legend:
-</Typography>
-<Box sx={{ display: 'flex', gap: 2, mt: 0.5 }}>
-<Box sx={{ display: 'flex', alignItems: 'center' }}>
-<Box sx={{ width: 16, height: 16, bgcolor: '#e3f2fd', borderRadius: 1, mr: 0.5 }}></Box>
-<Typography variant="caption">Core Courses</Typography>
-</Box>
-<Box sx={{ display: 'flex', alignItems: 'center' }}>
-<Box sx={{ width: 16, height: 16, bgcolor: '#f1f8e9', borderRadius: 1, mr: 0.5 }}></Box>
-<Typography variant="caption">Elective Courses</Typography>
-</Box>
-<Box sx={{ display: 'flex', alignItems: 'center' }}>
-<Box sx={{ width: 16, height: 16, bgcolor: '#fff3cd', borderRadius: 1, mr: 0.5 }}></Box>
-<Typography variant="caption">Manual Override</Typography>
-</Box>
-</Box>
-</Box>
+  <Box>
+    <Typography variant="body2" color="text.secondary">
+      Legend:
+    </Typography>
+    <Box sx={{ display: 'flex', gap: 2, mt: 0.5 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+        <Box sx={{ width: 16, height: 16, bgcolor: '#e3f2fd', borderRadius: 1, mr: 0.5 }}></Box>
+        <Typography variant="caption">Core Courses</Typography>
+      </Box>
+      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+        <Box sx={{ width: 16, height: 16, bgcolor: '#f1f8e9', borderRadius: 1, mr: 0.5 }}></Box>
+        <Typography variant="caption">Elective Courses</Typography>
+      </Box>
+      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+        <Box sx={{ width: 16, height: 16, bgcolor: '#fff3cd', borderRadius: 1, mr: 0.5 }}></Box>
+        <Typography variant="caption">Manual Override</Typography>
+      </Box>
+    </Box>
+  </Box>
 
-{scheduledCourses.length > 0 && (
-<Typography variant="body2">
-{scheduledCourses.length} courses scheduled
-</Typography>
-)}
+  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+    {/* Add the export button here */}
+    <Button
+      variant="outlined"
+      startIcon={<UploadIcon />}
+      onClick={handleExportToExcel}
+      disabled={loading || loadingCourses || schedules.length === 0 || !selectedSchedule}
+      size="small"
+      sx={{ height: 'fit-content' }}
+    >
+      Export to Excel
+    </Button>
+    
+    <Button
+    variant="outlined"
+    startIcon={<PictureAsPdfIcon />}
+    onClick={handleExportToPdf}
+    disabled={loading || loadingCourses || schedules.length === 0 || !selectedSchedule}
+    size="small"
+    color="primary"
+  >
+    Export to PDF
+  </Button>
+    {scheduledCourses.length > 0 && (
+      <Typography variant="body2">
+        {scheduledCourses.length} courses scheduled
+      </Typography>
+    )}
+  </Box>
 </Box>
 </CardContent>
 </Card>

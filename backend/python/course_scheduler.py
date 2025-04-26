@@ -1,3 +1,4 @@
+import sys
 try:
     from ortools.sat.python import cp_model
 except ImportError:
@@ -89,8 +90,10 @@ class CourseScheduler:
         
         # Solve the model
         self.solver = cp_model.CpSolver()
-        self.solver.parameters.max_time_in_seconds = 120  # 2 minute timeout
+        self.solver.parameters.max_time_in_seconds = 1000000  # 2 minute timeout
         status = self.solver.Solve(self.model)
+        
+
         
         solve_time = time.time() - start_time
         
