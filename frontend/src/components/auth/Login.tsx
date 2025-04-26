@@ -107,7 +107,7 @@ const Login: React.FC = () => {
   }} 
         />
         <Typography variant="h4" component="h1" sx={{ color: 'white', fontWeight: 'bold', mb: 1 }}>
-          Lerner Graduate College
+          Lerner Graduate Programs
         </Typography>
         <Typography variant="h6" sx={{ color: '#FFD200' /* UD Yellow */ }}>
           Course Scheduling System
