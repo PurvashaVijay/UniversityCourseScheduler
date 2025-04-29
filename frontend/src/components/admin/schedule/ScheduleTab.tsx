@@ -89,6 +89,7 @@ const ScheduleTab: React.FC = () => {
       <ConflictManagement
         scheduleId={selectedScheduleId}
         onConflictResolved={handleConflictResolved}
+        selectedProgram={selectedProgram}
       />
     </Box>
   );

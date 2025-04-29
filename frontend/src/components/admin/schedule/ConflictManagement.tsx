@@ -42,10 +42,11 @@ import scheduleService, { Conflict } from '../../../services/scheduleService';
 interface ConflictManagementProps {
   scheduleId?: string;
   onConflictResolved?: () => void;
+  selectedProgram?: string; 
 }
 
 const ConflictManagement: React.FC<ConflictManagementProps> = ({
-  scheduleId, onConflictResolved 
+  scheduleId, onConflictResolved,  selectedProgram
 }) => {
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -70,16 +71,8 @@ const ConflictManagement: React.FC<ConflictManagementProps> = ({
 
   // Fetch conflicts when scheduleId changes
   useEffect(() => {
-    if (conflicts.length > 0) {
-      console.log('First conflict data:', conflicts[0]);
-      console.log('Time slot info:', conflicts[0].timeslot_info);
-      console.log('Direct time slot:', conflicts[0].timeslot);
-      console.log('Scheduled courses:', conflicts[0].scheduled_courses);
-    }
-  }, [conflicts]);
-
-  useEffect(() => {
     console.log("ConflictManagement received scheduleId:", scheduleId);
+    console.log("ConflictManagement using program filter:", selectedProgram);
     
     const fetchConflicts = async () => {
       if (!scheduleId) return;
@@ -87,7 +80,7 @@ const ConflictManagement: React.FC<ConflictManagementProps> = ({
       try {
         setLoading(true);
         console.log("Fetching conflicts for schedule ID:", scheduleId);
-        const data = await scheduleService.getScheduleConflicts(scheduleId);
+        const data = await scheduleService.getScheduleConflicts(scheduleId, selectedProgram);
         console.log('Fetched conflicts:', data);
         setConflicts(data);
       } catch (error) {
@@ -101,14 +94,14 @@ const ConflictManagement: React.FC<ConflictManagementProps> = ({
         setLoading(false);
       }
     };
-
+  
     if (scheduleId) {
       fetchConflicts();
     } else {
       setConflicts([]);
       setLoading(false);
     }
-  }, [scheduleId]);
+  }, [scheduleId, selectedProgram]); // Add selectedProgram to dependency array
 
   const handleResolveClick = (conflict: Conflict, type: 'ACCEPT' | 'OVERRIDE') => {
     setSelectedConflict(conflict);
