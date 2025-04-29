@@ -15,6 +15,8 @@ const departmentRoutes = require('./routes/departmentRoutes');
 const testRoutes = require('./routes/test');
 // Near the top with your other requires
 const tempAuthRoutes = require('./routes/tempAuth');
+const dashboardRoutes = require('./routes/dashboardRoutes');
+app.use('/api/dashboard', dashboardRoutes);
 
 // Middleware
 app.use(express.json());

@@ -8,7 +8,8 @@ import {
   Typography, 
   Grid, 
   Divider,
-  Button
+  Button,
+  CircularProgress
 } from '@mui/material';
 import SchoolIcon from '@mui/icons-material/School';
 import ClassIcon from '@mui/icons-material/Class';
@@ -17,19 +18,7 @@ import ScheduleIcon from '@mui/icons-material/Schedule';
 import WarningIcon from '@mui/icons-material/Warning';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-
-// This would be connected to your actual API services
-const fetchDashboardData = async () => {
-  // This is a placeholder, you'd fetch real data from your API
-  return {
-    departments: 5,
-    programs: 12,
-    courses: 78,
-    professors: 60,
-    activeSchedules: 2,
-    pendingConflicts: 7,
-  };
-};
+import dashboardService from '../../services/dashboardService';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
@@ -42,14 +31,18 @@ const Dashboard: React.FC = () => {
     pendingConflicts: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const dashboardData = await fetchDashboardData();
+        setLoading(true);
+        setError(null);
+        const dashboardData = await dashboardService.getDashboardStats();
         setData(dashboardData);
       } catch (error) {
         console.error('Error loading dashboard data:', error);
+        setError('Failed to load dashboard data. Please try again later.');
       } finally {
         setLoading(false);
       }
@@ -63,13 +56,15 @@ const Dashboard: React.FC = () => {
     value, 
     icon, 
     link, 
-    color = '#00539F' 
+    color = '#00539F',
+    isLoading
   }: { 
     title: string; 
     value: number; 
     icon: React.ReactNode; 
     link: string; 
     color?: string;
+    isLoading: boolean;
   }) => (
     <Card sx={{ 
       minHeight: 150, 
@@ -100,7 +95,7 @@ const Dashboard: React.FC = () => {
           </Box>
         </Box>
         <Typography variant="h3" component="div" sx={{ mt: 2, fontWeight: 'bold' }}>
-          {loading ? '...' : value}
+          {isLoading ? <CircularProgress size={24} /> : value}
         </Typography>
       </CardContent>
       <Divider />
@@ -128,6 +123,12 @@ const Dashboard: React.FC = () => {
         </Typography>
       </Box>
 
+      {error && (
+        <Box sx={{ mb: 3, p: 2, bgcolor: '#ffebee', borderRadius: 1 }}>
+          <Typography color="error">{error}</Typography>
+        </Box>
+      )}
+
       <Grid container spacing={3}>
         <Grid item xs={12} md={4}>
           <DashboardCard
@@ -135,6 +136,7 @@ const Dashboard: React.FC = () => {
             value={data.departments}
             icon={<SchoolIcon />}
             link="/admin/departments"
+            isLoading={loading}
           />
         </Grid>
         <Grid item xs={12} md={4}>
@@ -143,6 +145,7 @@ const Dashboard: React.FC = () => {
             value={data.programs}
             icon={<ClassIcon />}
             link="/admin/programs"
+            isLoading={loading}
           />
         </Grid>
         <Grid item xs={12} md={4}>
@@ -151,6 +154,7 @@ const Dashboard: React.FC = () => {
             value={data.courses}
             icon={<ClassIcon />}
             link="/admin/courses"
+            isLoading={loading}
           />
         </Grid>
         <Grid item xs={12} md={4}>
@@ -159,6 +163,7 @@ const Dashboard: React.FC = () => {
             value={data.professors}
             icon={<PersonIcon />}
             link="/admin/professors"
+            isLoading={loading}
           />
         </Grid>
         <Grid item xs={12} md={4}>
@@ -167,6 +172,7 @@ const Dashboard: React.FC = () => {
             value={data.activeSchedules}
             icon={<ScheduleIcon />}
             link="/admin/schedules"
+            isLoading={loading}
           />
         </Grid>
         <Grid item xs={12} md={4}>
@@ -176,6 +182,7 @@ const Dashboard: React.FC = () => {
             icon={<WarningIcon />}
             link="/admin/schedules/conflicts"
             color="#f44336"
+            isLoading={loading}
           />
         </Grid>
       </Grid>
