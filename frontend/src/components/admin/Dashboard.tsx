@@ -180,7 +180,7 @@ const Dashboard: React.FC = () => {
             title="Pending Conflicts"
             value={data.pendingConflicts}
             icon={<WarningIcon />}
-            link="/admin/schedules/conflicts"
+            link="/admin/schedules"
             color="#f44336"
             isLoading={loading}
           />
