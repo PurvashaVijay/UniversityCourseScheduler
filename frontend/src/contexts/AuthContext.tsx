@@ -79,7 +79,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string): Promise<{ success: boolean; message?: string }> => {
     try {
       // Always use 'admin' role
-      const result = await authService.login(email, password, 'admin');
+      const result = await authService.login(email, password);
       
       if (result.success && result.user) {
         // Transform the user object to match our User type

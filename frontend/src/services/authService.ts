@@ -1,7 +1,6 @@
 // src/services/authService.ts
 
 // API base URL - points to our backend server
-//const API_URL = 'http://localhost:8000/api';
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
 
 // Type definitions
@@ -12,13 +11,19 @@ interface LoginResponse {
   user?: any;
 }
 
+interface RegisterResponse {
+  success: boolean;
+  message?: string;
+  user?: any;
+}
+
 const authService = {
-  login: async (email: string, password: string, role: string): Promise<LoginResponse> => {
+  login: async (email: string, password: string): Promise<LoginResponse> => {
     try {
-      // Endpoint depends on the role
-      const endpoint = 'auth/admin/login';
-      
-      const response = await fetch(`${API_URL}/${endpoint}`, {
+      // Log the API URL for debugging
+      console.log('Using API URL:', `${API_URL}/auth/admin/login`);
+  
+      const response = await fetch(`${API_URL}/auth/admin/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -26,24 +31,79 @@ const authService = {
         body: JSON.stringify({ email, password }),
       });
       
+      // Log response status
+      console.log('Login response status:', response.status);
+      
+      // If response is not OK, get the error text
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Login error response:', errorText);
+        return {
+          success: false,
+          message: 'Login failed: ' + (response.statusText || 'Unknown error')
+        };
+      }
+      
       const data = await response.json();
       
-      // If login was successful, store the token and user info
-      /*if (data.success && data.token) {
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
-      }*/
-
       if (data.token) {
+        // Store token and user info
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
-        return { success: true, message: data.message, token: data.token, user: data.user };
+        
+        return {
+          success: true,
+          message: 'Login successful',
+          token: data.token,
+          user: data.user
+        };
       }
-      return { success: false, message: data.message || 'Login failed' };
       
-      //return data;
+      return {
+        success: false,
+        message: data.message || 'Login failed'
+      };
     } catch (error) {
       console.error('Login error:', error);
+      return {
+        success: false,
+        message: 'Network error. Please check your connection and try again.'
+      };
+    }
+  },
+
+  register: async (firstName: string, lastName: string, email: string, password: string): Promise<RegisterResponse> => {
+    try {
+      // Validate email domain on client side first
+      if (!email.endsWith('@udel.edu')) {
+        return {
+          success: false,
+          message: 'Only @udel.edu email addresses are allowed'
+        };
+      }
+      
+      const response = await fetch(`${API_URL}/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          first_name: firstName,
+          last_name: lastName,
+          email,
+          password
+        }),
+      });
+      
+      const data = await response.json();
+      
+      return {
+        success: response.ok,
+        message: data.message,
+        user: data.user
+      };
+    } catch (error) {
+      console.error('Registration error:', error);
       return {
         success: false,
         message: 'Network error. Please check your connection and try again.'
@@ -53,6 +113,14 @@ const authService = {
   
   tempLogin: async (email: string): Promise<LoginResponse> => {
     try {
+      // Validate email domain on client side first
+      if (!email.endsWith('@udel.edu')) {
+        return {
+          success: false,
+          message: 'Only @udel.edu email addresses are allowed'
+        };
+      }
+      
       const response = await fetch(`${API_URL}/auth/temp-login`, {
         method: 'POST',
         headers: {
@@ -63,14 +131,25 @@ const authService = {
       
       const data = await response.json();
       
-      if (data.success && data.token) {
+      if (data.token) {
+        // Store token and user info
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
+        
+        return {
+          success: true,
+          message: data.message || 'Temporary login successful',
+          token: data.token,
+          user: data.user
+        };
       }
       
-      return data;
+      return {
+        success: false,
+        message: data.message || 'Temporary login failed'
+      };
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('Temp login error:', error);
       return {
         success: false,
         message: 'Network error. Please check your connection and try again.'
@@ -82,33 +161,7 @@ const authService = {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
   },
-  /*
-  getCurrentUser: async (): Promise<any> => {
-    try {
-      const token = localStorage.getItem('token');
-      
-      if (!token) {
-        throw new Error('No authentication token found');
-      }
-      
-      const response = await fetch(`${API_URL}/auth/me`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch user data');
-      }
-      
-      const data = await response.json();
-      return data.user;
-    } catch (error) {
-      console.error('Get current user error:', error);
-      return null;
-    }
-  },
-  */
+  
   getCurrentUser: async (): Promise<any> => {
     try {
       // First try to get user from localStorage to avoid API call failures

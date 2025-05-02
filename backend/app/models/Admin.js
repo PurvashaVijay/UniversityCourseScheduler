@@ -1,6 +1,6 @@
-// Updated Admin.js model
+// app/models/Admin.js
 const { DataTypes, Model } = require('sequelize');
-const sequelize = require('../../src/config/database').sequelize;
+const { sequelize } = require('../../src/config/database');
 const bcrypt = require('bcrypt');
 
 class Admin extends Model {
@@ -16,7 +16,7 @@ Admin.init({
   },
   department_id: {
     type: DataTypes.STRING(50),
-    allowNull: true, // Changed to allow null for super admin
+    allowNull: true, // Allow null for super admin
     references: {
       model: 'department',
       key: 'department_id'
@@ -38,16 +38,18 @@ Admin.init({
       isEmail: true
     }
   },
-  password: {
-    type: DataTypes.VIRTUAL,
-    allowNull: true,
-    validate: {
-      len: [6, 100]
-    }
-  },
   password_hash: {
     type: DataTypes.STRING(255),
     allowNull: false
+  },
+  // Add the reset token fields here, inside the fields definition
+  reset_token: {
+    type: DataTypes.STRING(255),
+    allowNull: true
+  },
+  reset_token_expires: {
+    type: DataTypes.DATE,
+    allowNull: true
   },
   created_at: {
     type: DataTypes.DATE,

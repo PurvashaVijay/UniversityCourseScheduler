@@ -13,6 +13,7 @@ import AdminLayout from './components/admin/AdminLayout';
 
 // Auth components
 import Login from './components/auth/Login';
+import SignUp from './components/auth/SignUp';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import Unauthorized from './components/common/Unauthorized';
 
@@ -35,6 +36,9 @@ import CourseDetails from './components/admin/courses/CourseDetails';
 // Admin components - Professors
 import ProfessorList from './components/admin/professors/ProfessorList';
 import ProfessorDetails from './components/admin/professors/ProfessorDetails';
+
+// Admin components - RestPassword
+import ResetPassword from './components/auth/ResetPassword';
 
 // Admin components - ScheduleView
 import ScheduleTab from './components/admin/schedule/ScheduleTab';
@@ -70,6 +74,7 @@ const App: React.FC = () => {
           <Routes>
             {/* Public routes */}
             <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<SignUp />} />
             <Route path="/unauthorized" element={<Unauthorized />} />
             
             {/* Admin routes */}
@@ -110,6 +115,9 @@ const App: React.FC = () => {
             
             {/* Redirect root to login */}
             <Route path="/" element={<Navigate to="/login" replace />} />
+
+            {/* Redirect root to rest password */}
+            <Route path="/reset-password" element={<ResetPassword />} />
             
             {/* 404 - Not Found */}
             <Route path="*" element={<div>Page Not Found</div>} />
