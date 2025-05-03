@@ -327,21 +327,47 @@ async function processSolution(solution, scheduleId, transaction) {
   console.log(`Solution contains ${scheduled_courses.length} scheduled courses and ${conflicts.length} conflicts`);
   console.log('Solution statistics:', statistics);
   
+  // Add counter for conflict placeholder records
+  let conflictPlaceholderCount = 0;
+  
   // Create a mapping from Python-generated IDs to our new UUIDs
   const scheduledCourseIdMap = new Map();
   const savedScheduledCourses = [];
+
+  // Track which course instances have been processed
+  const processedInstances = new Set();
   
   // Save scheduled courses to database with new unique IDs
   for (const course of scheduled_courses) {
     try {
+      // Check if this is a valid scheduled course with all required fields
+      if (!course.course_id || !course.professor_id || !course.timeslot_id || !course.day_of_week) {
+        console.warn(`Skipping incomplete course data: ${JSON.stringify(course)}`);
+        continue;
+      }
+      
+      // Create a unique identifier for logging
+      const instanceKey = `${course.course_id}_${course.class_instance || 1}`;
+      
+      // Skip if we've already processed this instance
+      if (processedInstances.has(instanceKey)) {
+        console.warn(`Skipping duplicate course instance: ${instanceKey}`);
+        continue;
+      }
+      
+      processedInstances.add(instanceKey);
+      
       // Generate a new unique ID
       const uniqueId = 'SC-' + uuidv4().substring(0, 8);
       
       // Store the mapping from Python-generated ID to our new ID
       scheduledCourseIdMap.set(course.scheduled_course_id, uniqueId);
       
+      // Debug logging
+      console.log(`Processing course ${course.course_id} instance ${course.class_instance || 1} on ${course.day_of_week} at ${course.timeslot_id}`);
+      
       const scheduledCourse = await ScheduledCourse.create({
-        scheduled_course_id: uniqueId, // Use our new unique ID instead of course.scheduled_course_id
+        scheduled_course_id: uniqueId,
         schedule_id: scheduleId,
         course_id: course.course_id,
         professor_id: course.professor_id,
@@ -351,6 +377,7 @@ async function processSolution(solution, scheduleId, transaction) {
         override_reason: course.override_reason,
         class_instance: course.class_instance || 1,
         num_classes: course.num_classes || 1,
+        status: 'scheduled',  // Add status field
         created_at: new Date(),
         updated_at: new Date()
       }, { transaction });
@@ -361,6 +388,9 @@ async function processSolution(solution, scheduleId, transaction) {
       throw error;
     }
   }
+
+  // Update console logging to show counts clearly
+  console.log(`Successfully saved ${savedScheduledCourses.length} scheduled courses to database`);
   
   // Save conflicts to database with new unique IDs
   const savedConflicts = [];
@@ -427,9 +457,13 @@ async function processSolution(solution, scheduleId, transaction) {
           is_override: false,
           class_instance: course.class_instance || 1,
           num_classes: course.num_classes || 1,
+          status: 'conflict',  // Add status field
           created_at: new Date(),
           updated_at: new Date()
         }, { transaction });
+        
+        // Increment conflict placeholder counter
+        conflictPlaceholderCount++;
         
         // Create the conflict course association
         await ConflictCourse.create({
@@ -445,6 +479,10 @@ async function processSolution(solution, scheduleId, transaction) {
       throw error;
     }
   }
+  
+  // Add improved console logging with clear counts
+  console.log(`Created ${conflictPlaceholderCount} placeholder records for unscheduled courses`);
+  console.log(`Total records in scheduled_course table: ${savedScheduledCourses.length + conflictPlaceholderCount}`);
   
   return {
     scheduled_courses: savedScheduledCourses,
