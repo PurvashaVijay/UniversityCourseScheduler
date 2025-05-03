@@ -1,5 +1,33 @@
 const express = require('express');
 const cors = require('cors');
+const nodemailer = require('nodemailer');
+/*
+async function setupTestEmailAccount() {
+  // Create a test account at Ethereal
+  const testAccount = await nodemailer.createTestAccount();
+  
+  console.log('Test email account created:');
+  console.log('- Email:', testAccount.user);
+  console.log('- Password:', testAccount.pass);
+  console.log('- SMTP Host:', testAccount.smtp.host);
+  console.log('- SMTP Port:', testAccount.smtp.port);
+  
+  // Update environment variables
+  process.env.EMAIL_HOST = testAccount.smtp.host;
+  process.env.EMAIL_PORT = testAccount.smtp.port;
+  process.env.EMAIL_SECURE = testAccount.smtp.secure;
+  process.env.EMAIL_USER = testAccount.user;
+  process.env.EMAIL_PASS = testAccount.pass;
+  
+  console.log('Test email account configured successfully!');
+}
+
+// Call this function when the server starts in development mode
+if (process.env.NODE_ENV !== 'production') {
+  setupTestEmailAccount()
+    .catch(console.error);
+}
+*/
 
 // Create Express app FIRST, before using it
 const app = express();
@@ -63,5 +91,15 @@ app.use((err, req, res, next) => {
     error: process.env.NODE_ENV === 'development' ? err.message : undefined 
   });
 });
+const { initializeTransporter } = require('./services/emailService');
 
+// Initialize email service
+try {
+  console.log('Initializing email service...');
+  // Just reference the already-initialized email service
+  const emailService = require('./services/emailService');
+  console.log('Email service initialization referenced successfully');
+} catch (error) {
+  console.error('Failed to reference email service:', error);
+}
 module.exports = app;

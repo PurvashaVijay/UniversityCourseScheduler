@@ -11,7 +11,7 @@ interface Program {
   program_id: string;
   name: string;
 }
-
+  
 const ScheduleTab: React.FC = () => {
   const [selectedScheduleId, setSelectedScheduleId] = useState<string | undefined>(undefined);
   const [refreshCounter, setRefreshCounter] = useState<number>(0);
@@ -89,6 +89,7 @@ const ScheduleTab: React.FC = () => {
       <ConflictManagement
         scheduleId={selectedScheduleId}
         onConflictResolved={handleConflictResolved}
+        selectedProgram={selectedProgram}
       />
     </Box>
   );

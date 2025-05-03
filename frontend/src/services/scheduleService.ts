@@ -307,11 +307,18 @@ export const deleteSchedule = async (scheduleId: string): Promise<{
 };
 
 // Get conflicts for a schedule
-export const getScheduleConflicts = async (scheduleId: string): Promise<Conflict[]> => {
+// Replace the existing getScheduleConflicts function with this:
+export const getScheduleConflicts = async (scheduleId: string, programId?: string): Promise<Conflict[]> => {
   try {
     const token = authService.getToken();
     
-    const response = await fetch(`${API_URL}/schedules/${scheduleId}/conflicts`, {
+    // Build URL with query parameters if program_id exists
+    let url = `${API_URL}/schedules/${scheduleId}/conflicts`;
+    if (programId) {
+      url += `?program_id=${programId}`;
+    }
+    
+    const response = await fetch(url, {
       headers: {
         'Authorization': `Bearer ${token}`
       }

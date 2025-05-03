@@ -586,6 +586,10 @@ exports.getActiveSemesterSchedule = async (req, res) => {
 exports.getScheduleConflicts = async (req, res) => {
   try {
     const scheduleId = req.params.id;
+    const programId = req.query.program_id;
+    
+    console.log(`Loading conflicts for schedule: ${scheduleId}`);
+    console.log(`Program filter: ${programId || 'none'}`);
     
     // Check if schedule exists
     const schedule = await Schedule.findByPk(scheduleId);
@@ -593,7 +597,8 @@ exports.getScheduleConflicts = async (req, res) => {
       return res.status(404).json({ message: 'Schedule not found' });
     }
     
-    const conflicts = await Conflict.findAll({
+    // Base query for conflicts
+    let conflictQuery = {
       where: { schedule_id: scheduleId },
       include: [
         { 
@@ -614,17 +619,104 @@ exports.getScheduleConflicts = async (req, res) => {
         }
       ],
       order: [['created_at', 'DESC']]
+    };
+    
+    // Fetch all conflicts first
+    const allConflicts = await Conflict.findAll(conflictQuery);
+    console.log(`Found ${allConflicts.length} total conflicts for schedule ${scheduleId}`);
+    
+    // If no program filter is applied or no conflicts found, return all conflicts
+    if (!programId || allConflicts.length === 0) {
+      // Process the conflicts to ensure we have time slot information
+      const processedConflicts = allConflicts.map(conflict => {
+        const conflictJson = conflict.toJSON();
+        
+        // Extract time slot information from either conflict's time slot or first scheduled course
+        let timeSlotInfo = conflictJson.timeslot || conflictJson.time_slot || null;
+        
+        if (!timeSlotInfo && conflictJson.ScheduledCourses && conflictJson.ScheduledCourses.length > 0) {
+          timeSlotInfo = conflictJson.ScheduledCourses[0].timeslot || 
+                         conflictJson.ScheduledCourses[0].time_slot || null;
+        }
+        
+        // Return the processed conflict data
+        return {
+          ...conflictJson,
+          timeslot_info: timeSlotInfo // Add a dedicated field for time slot info
+        };
+      });
+      
+      return res.status(200).json(processedConflicts);
+    }
+    
+    // If program filter is applied, we need to filter conflicts to only those involving courses in the program
+    
+    // Get all course IDs that belong to this program
+    const courseProgramEntries = await CourseProgram.findAll({
+      where: { program_id: programId },
+      attributes: ['course_id']
     });
     
-    // Process the conflicts to ensure we have time slot information
-    const processedConflicts = conflicts.map(conflict => {
+    const programCourseIds = courseProgramEntries.map(cp => cp.course_id);
+    console.log(`Found ${programCourseIds.length} courses in program ${programId}:`, programCourseIds);
+    
+    // Check all conflicts for debugging
+    allConflicts.forEach((conflict, index) => {
+      const conflictJson = conflict.toJSON();
+      console.log(`Conflict ${index + 1} ID: ${conflictJson.conflict_id}`);
+      
+      const courseIds = conflictJson.ScheduledCourses 
+                        ? conflictJson.ScheduledCourses.map(sc => sc.course_id || (sc.course && sc.course.course_id))
+                        : [];
+      console.log(`  Course IDs in conflict: ${courseIds.join(', ')}`);
+      
+      const matchingCourses = courseIds.filter(id => programCourseIds.includes(id));
+      console.log(`  Matching courses with program: ${matchingCourses.join(', ')}`);
+    });
+    
+    // Filter conflicts that have scheduled courses belonging to the program
+    const filteredConflicts = allConflicts.filter(conflict => {
+      // Convert to plain JSON for easier handling
+      const conflictJson = conflict.toJSON();
+      
+      // Check for ScheduledCourses - adapt to the actual property name
+      const scheduledCourses = conflictJson.ScheduledCourses || 
+                              conflictJson.scheduled_courses || 
+                              [];
+      
+      if (!scheduledCourses || scheduledCourses.length === 0) {
+        console.log(`Conflict ${conflictJson.conflict_id} has no scheduled courses`);
+        return false;
+      }
+      
+      // Check each scheduled course to see if any match the program
+      const hasMatchingCourse = scheduledCourses.some(sc => {
+        // Get the course ID - adapt to the actual structure
+        const courseId = sc.course_id || (sc.course && sc.course.course_id);
+        const isMatching = programCourseIds.includes(courseId);
+        
+        if (isMatching) {
+          console.log(`Found matching course ${courseId} in conflict ${conflictJson.conflict_id}`);
+        }
+        
+        return isMatching;
+      });
+      
+      return hasMatchingCourse;
+    });
+    
+    console.log(`Filtered from ${allConflicts.length} to ${filteredConflicts.length} conflicts based on program ${programId}`);
+    
+    // Process the filtered conflicts to ensure we have time slot information
+    const processedFilteredConflicts = filteredConflicts.map(conflict => {
       const conflictJson = conflict.toJSON();
       
       // Extract time slot information from either conflict's time slot or first scheduled course
-      let timeSlotInfo = conflictJson.timeslot || null;
+      let timeSlotInfo = conflictJson.timeslot || conflictJson.time_slot || null;
       
       if (!timeSlotInfo && conflictJson.ScheduledCourses && conflictJson.ScheduledCourses.length > 0) {
-        timeSlotInfo = conflictJson.ScheduledCourses[0].timeslot || null;
+        timeSlotInfo = conflictJson.ScheduledCourses[0].timeslot || 
+                       conflictJson.ScheduledCourses[0].time_slot || null;
       }
       
       // Return the processed conflict data
@@ -634,13 +726,13 @@ exports.getScheduleConflicts = async (req, res) => {
       };
     });
     
-    return res.status(200).json(processedConflicts);
+    return res.status(200).json(processedFilteredConflicts);
+    
   } catch (error) {
     console.error('Error retrieving schedule conflicts:', error);
     return res.status(500).json({ message: 'Failed to retrieve schedule conflicts' });
   }
 };
-
 // Resolve a conflict
 // Resolve a conflict
 exports.resolveConflict = async (req, res) => {
