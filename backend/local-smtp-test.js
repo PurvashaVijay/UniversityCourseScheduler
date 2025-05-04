@@ -4,7 +4,7 @@ const nodemailer = require('nodemailer');
 // Create a transporter using the local sendmail
 const transporter = nodemailer.createTransport({
   sendmail: true,
-  newline: 'unix',
+  newline: 'windows',
   path: '/usr/sbin/sendmail'
 });
 
